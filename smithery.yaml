@@ -1,23 +1,24 @@
-# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
-
+runtime: "container"
 startCommand:
-  type: stdio
+  type: "http"
   configSchema:
-    # JSON Schema defining the configuration options for the MCP.
-    type: object
-    required:
-      - youtubeApiKey
+    type: "object"
+    required: ["YOUTUBE_API_KEY"]
     properties:
-      youtubeApiKey:
-        type: string
-        description: YouTube Data API key
-  commandFunction:
-    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
-    |-
-    (config) => ({
-      command: 'node',
-      args: ['dist/index.js'],
-      env: { ...process.env, YOUTUBE_API_KEY: config.youtubeApiKey }
-    })
+      YOUTUBE_API_KEY:
+        type: "string"
+        title: "YouTube API Key"
+        description: "Your YouTube Data API v3 key"
+      PORT:
+        type: "string"
+        title: "Server Port"
+        description: "Port for the HTTP server"
+        default: "3000"
   exampleConfig:
-    youtubeApiKey: your_dummy_youtube_api_key
+    YOUTUBE_API_KEY: "your_youtube_api_key_here"
+    PORT: "3000"
+build:
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."
+env:
+  NODE_ENV: "production"
