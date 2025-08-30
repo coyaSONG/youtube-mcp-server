@@ -1,24 +1,3 @@
-runtime: "container"
-startCommand:
-  type: "http"
-  configSchema:
-    type: "object"
-    required: ["YOUTUBE_API_KEY"]
-    properties:
-      YOUTUBE_API_KEY:
-        type: "string"
-        title: "YouTube API Key"
-        description: "Your YouTube Data API v3 key"
-      PORT:
-        type: "string"
-        title: "Server Port"
-        description: "Port for the HTTP server"
-        default: "3000"
-  exampleConfig:
-    YOUTUBE_API_KEY: "your_youtube_api_key_here"
-    PORT: "3000"
-build:
-  dockerfile: "Dockerfile"
-  dockerBuildPath: "."
+runtime: "typescript"
 env:
   NODE_ENV: "production"

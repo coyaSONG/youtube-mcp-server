@@ -2,6 +2,7 @@
   "name": "@coyasong/youtube-mcp-server",
   "version": "1.0.0",
   "main": "dist/index.js",
+  "module": "./src/index.ts",
   "type": "module",
   "bin": {
     "youtube-mcp-server": "./dist/index.js"

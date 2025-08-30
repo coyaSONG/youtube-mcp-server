@@ -6,30 +6,25 @@ import { TranscriptSegment, TranscriptOptions, FormattedTranscript, TranscriptEr
 
 dotenv.config();
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const TRANSCRIPT_CACHE_TTL = 3600; // Cache transcripts for 1 hour
-
-if (!YOUTUBE_API_KEY) {
-  console.error('Warning: YOUTUBE_API_KEY is not defined in the environment variables');
-  console.error('YouTube API functionality will be limited');
-}
 
 export class YouTubeService {
   public youtube: youtube_v3.Youtube;
   private transcriptCache: NodeCache;
+  private apiKey: string;
 
-  constructor() {
-    if (YOUTUBE_API_KEY) {
-      this.youtube = google.youtube({
-        version: 'v3',
-        auth: YOUTUBE_API_KEY
-      });
-    } else {
-      // Create a dummy youtube instance for graceful degradation
-      this.youtube = google.youtube({
-        version: 'v3'
-      });
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey || process.env.YOUTUBE_API_KEY || '';
+    
+    if (!this.apiKey) {
+      console.error('Warning: YouTube API key not provided');
+      console.error('YouTube API functionality will be limited');
     }
+
+    this.youtube = google.youtube({
+      version: 'v3',
+      auth: this.apiKey
+    });
     this.transcriptCache = new NodeCache({ stdTTL: TRANSCRIPT_CACHE_TTL });
   }
 
