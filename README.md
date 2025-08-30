@@ -56,10 +56,11 @@ npx -y @smithery/cli install @coyaSONG/youtube-mcp-server --client claude
    npm run build
    ```
 
-2. Run the server:
+2. Run the server (HTTP transport):
    ```bash
    npm start
    ```
+   The server will listen on port 3000 (or PORT environment variable) and accept MCP requests at `/mcp` endpoint.
 
 3. Run in development mode:
    ```bash
@@ -70,6 +71,15 @@ npx -y @smithery/cli install @coyaSONG/youtube-mcp-server --client claude
    ```bash
    npm run clean
    ```
+
+### HTTP Transport Migration
+
+This server has been migrated from STDIO transport to Streamable HTTP transport as required by Smithery hosting platform. The server now:
+
+- Uses Express.js with Streamable HTTP transport
+- Accepts requests at the `/mcp` endpoint
+- Supports session management for stateful operations
+- Maintains full compatibility with all existing tools and resources
 
 ## Docker Deployment
 
@@ -283,4 +293,4 @@ MIT
 
 - [Model Context Protocol TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [YouTube Data API](https://developers.google.com/youtube/v3)
-- [YouTube Captions Scraper](https://github.com/algolia/youtube-captions-scraper) 
+- [YouTube Captions Scraper](https://github.com/algolia/youtube-captions-scraper)
