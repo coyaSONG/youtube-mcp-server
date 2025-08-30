@@ -74,12 +74,33 @@ npx -y @smithery/cli install @coyaSONG/youtube-mcp-server --client claude
 
 ### HTTP Transport Migration
 
-This server has been migrated from STDIO transport to Streamable HTTP transport as required by Smithery hosting platform. The server now:
+**Migration Status**: ✅ **Complete** - Successfully migrated from STDIO to Streamable HTTP transport
 
-- Uses Express.js with Streamable HTTP transport
-- Accepts requests at the `/mcp` endpoint
-- Supports session management for stateful operations
-- Maintains full compatibility with all existing tools and resources
+This server has been updated to use the modern Streamable HTTP transport as required by Smithery hosting platform. The migration includes:
+
+- **Modern Protocol**: Uses Streamable HTTP transport (protocol version 2025-03-26)
+- **Express.js Framework**: Built on Express.js for robust HTTP handling
+- **Session Management**: Supports stateful operations with proper session tracking
+- **MCP Endpoint**: All requests handled at `/mcp` endpoint
+- **Backwards Compatibility**: Maintains full compatibility with all existing tools and resources
+- **Enhanced Performance**: Improved scalability and better error handling
+
+### Testing the Migration
+
+**Local Testing**:
+```bash
+# Start the server
+npm start
+
+# Test with MCP Inspector
+npx @modelcontextprotocol/inspector
+# Connect to: http://localhost:3000/mcp
+```
+
+**Smithery Integration**:
+- The server is fully compatible with Smithery's new hosting requirements
+- All existing Claude Desktop integrations will continue to work seamlessly
+- No changes required for end users
 
 ## Docker Deployment
 
@@ -89,9 +110,11 @@ The project includes a Dockerfile for containerized deployment:
 # Build the Docker image
 docker build -t youtube-mcp-server .
 
-# Run the container
+# Run the container with HTTP transport
 docker run -p 3000:3000 --env-file .env youtube-mcp-server
 ```
+
+**Important**: The container now exposes port 3000 for HTTP-based MCP communication instead of STDIO.
 
 ## API Reference
 

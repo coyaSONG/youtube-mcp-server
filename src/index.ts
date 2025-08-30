@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
 import dotenv from 'dotenv';
@@ -18,7 +20,7 @@ const app = express();
 app.use(express.json());
 
 // Store transports by session ID
-const transports: { [sessionId: string]: SSEServerTransport } = {};
+const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // Helper function to format time in MM:SS format
 function formatTime(milliseconds: number): string {
@@ -952,33 +954,70 @@ ${summaryInstructions}`
   }
 );
 
-// SSE HTTP transport setup
-app.get('/sse', async (req, res) => {
-  const transport = new SSEServerTransport('/messages', res);
-  const sessionId = transport.sessionId;
-  transports[sessionId] = transport;
-  
-  res.on("close", () => {
-    delete transports[sessionId];
-  });
-  
-  await server.connect(transport);
+// Streamable HTTP transport setup
+app.post('/mcp', async (req, res) => {
+  const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  let transport: StreamableHTTPServerTransport;
+
+  if (sessionId && transports[sessionId]) {
+    // Reuse existing transport
+    transport = transports[sessionId];
+  } else if (!sessionId && isInitializeRequest(req.body)) {
+    // New initialization request
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (sessionId: string) => {
+        transports[sessionId] = transport;
+      }
+    });
+
+    // Clean up transport when closed
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        delete transports[transport.sessionId];
+      }
+    };
+
+    // Connect to the MCP server
+    await server.connect(transport);
+  } else {
+    // Invalid request
+    res.status(400).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Bad Request: No valid session ID provided',
+      },
+      id: null,
+    });
+    return;
+  }
+
+  // Handle the request
+  await transport.handleRequest(req, res, req.body);
 });
 
-app.post('/messages', async (req, res) => {
-  const sessionId = req.query.sessionId as string;
-  const transport = transports[sessionId];
-  if (transport) {
-    await transport.handlePostMessage(req, res, req.body);
-  } else {
-    res.status(400).send('No transport found for sessionId');
+// Reusable handler for GET and DELETE requests
+const handleSessionRequest = async (req: express.Request, res: express.Response) => {
+  const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  if (!sessionId || !transports[sessionId]) {
+    res.status(400).send('Invalid or missing session ID');
+    return;
   }
-});
+  
+  const transport = transports[sessionId];
+  await transport.handleRequest(req, res);
+};
+
+// Handle GET requests for server-to-client notifications via SSE
+app.get('/mcp', handleSessionRequest);
+
+// Handle DELETE requests for session termination
+app.delete('/mcp', handleSessionRequest);
 
 // Start the Express server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.error(`YouTube MCP Server listening on port ${PORT}`);
-  console.error(`SSE endpoint: http://localhost:${PORT}/sse`);
-  console.error(`Messages endpoint: http://localhost:${PORT}/messages`);
+  console.error(`MCP endpoint: http://localhost:${PORT}/mcp`);
 });
