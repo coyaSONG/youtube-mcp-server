@@ -10,8 +10,8 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const TRANSCRIPT_CACHE_TTL = 3600; // Cache transcripts for 1 hour
 
 if (!YOUTUBE_API_KEY) {
-  console.error('YOUTUBE_API_KEY is not defined in the environment variables');
-  process.exit(1);
+  console.error('Warning: YOUTUBE_API_KEY is not defined in the environment variables');
+  console.error('YouTube API functionality will be limited');
 }
 
 export class YouTubeService {
@@ -19,10 +19,17 @@ export class YouTubeService {
   private transcriptCache: NodeCache;
 
   constructor() {
-    this.youtube = google.youtube({
-      version: 'v3',
-      auth: YOUTUBE_API_KEY
-    });
+    if (YOUTUBE_API_KEY) {
+      this.youtube = google.youtube({
+        version: 'v3',
+        auth: YOUTUBE_API_KEY
+      });
+    } else {
+      // Create a dummy youtube instance for graceful degradation
+      this.youtube = google.youtube({
+        version: 'v3'
+      });
+    }
     this.transcriptCache = new NodeCache({ stdTTL: TRANSCRIPT_CACHE_TTL });
   }
 
