@@ -27,13 +27,13 @@
   "homepage": "https://github.com/coyaSONG/youtube-mcp-server#readme",
   "description": "",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^16.4.7",
-    "express": "^4.21.0",
-    "googleapis": "^148.0.0",
+    "express": "^5.2.1",
+    "googleapis": "^173.0.0",
     "node-cache": "^5.1.2",
     "youtube-captions-scraper": "^2.0.3",
-    "zod": "^3.24.2"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
