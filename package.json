@@ -30,7 +30,7 @@
     "@modelcontextprotocol/sdk": "^1.17.4",
     "dotenv": "^16.4.7",
     "express": "^4.21.0",
-    "googleapis": "^148.0.0",
+    "googleapis": "^173.0.0",
     "node-cache": "^5.1.2",
     "youtube-captions-scraper": "^2.0.3",
     "zod": "^3.24.2"
