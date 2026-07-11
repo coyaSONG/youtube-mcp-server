@@ -1,120 +1,202 @@
-# YouTube MCP Server
+# YouTube Research MCP
 
+[![CI](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml)
 [![smithery badge](https://smithery.ai/badge/@coyaSONG/youtube-mcp-server)](https://smithery.ai/server/@coyaSONG/youtube-mcp-server)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A Model Context Protocol (MCP) server for interacting with YouTube data. This server provides resources and tools to query YouTube videos, channels, comments, and transcripts through a stdio interface.
+Turn YouTube videos into citation-ready research for Codex, Claude, Cursor, and other MCP clients. Paste a video URL and get transcript evidence with timestamps and links that open at the exact quoted moment.
 
-## Features
+![YouTube Research MCP turns a video URL into focused timestamp-linked evidence](https://raw.githubusercontent.com/coyaSONG/youtube-mcp-server/main/docs/demo.svg)
 
-- Search for YouTube videos with advanced filtering options
-- Get detailed information about specific videos and channels
-- Compare statistics across multiple videos
-- Discover trending videos by region and category
-- Analyze channel performance and video statistics
-- Retrieve video comments and transcripts/captions
-- Generate video analysis and transcript summaries
-
-## Prerequisites
-
-- Node.js (v16+)
-- YouTube Data API key
-
-## Installation
-
-### Installing via Smithery
-
-To install YouTube MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@coyaSONG/youtube-mcp-server):
-
-```bash
-npx -y @smithery/cli install @coyaSONG/youtube-mcp-server --client claude
+```text
+Input:  https://youtu.be/dQw4w9WgXcQ
+Output: [01:05] ...evidence text...
+        https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=65s
 ```
 
-### Installing Manually
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/coyaSONG/youtube-mcp-server.git
-   cd youtube-mcp-server
-   ```
+No YouTube API key is required for transcript research.
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+## Why this server
 
-3. Create a `.env` file in the root directory:
-   ```
-   YOUTUBE_API_KEY=your_youtube_api_key_here
-   PORT=3000
-   ```
+- **Citation-ready research** — every transcript segment includes a timestamp and source URL.
+- **Zero-key quick start** — transcripts work immediately; add an API key only for search and analytics.
+- **URL-first input** — accepts normal, short, Shorts, embed, live, and raw video-ID formats.
+- **Agent-efficient filtering** — search inside transcripts and return nearby context instead of spending tokens on the entire video.
+- **Full YouTube intelligence** — optional API mode adds comments, video/channel statistics, trends, and comparisons.
+- **Remote-native MCP** — Streamable HTTP transport at `/mcp`, plus Docker and Smithery support.
 
-## Usage
+## Focused evidence, not a transcript dump
 
-### Building and Running
+The included live smoke test asks a focused question about a public video and compares the response with the full timestamped transcript:
 
-1. Build the project:
-   ```bash
-   npm run build
-   ```
+| Response | Characters returned |
+|---|---:|
+| Full transcript | 85,518 |
+| `research-video` (3 citations) | 970 |
+| Reduction | **98.9%** |
 
-2. Run the server (HTTP transport):
-   ```bash
-   npm start
-   ```
-   The server will listen on port 3000 (or PORT environment variable) and accept MCP requests at `/mcp` endpoint.
+This measures response characters, not model-specific tokens. Reproduce it against the default public fixture—or substitute your own video and query:
 
-3. Run in development mode:
-   ```bash
-   npm run dev
-   ```
-
-4. Clean build artifacts:
-   ```bash
-   npm run clean
-   ```
-
-### HTTP Transport Migration
-
-**Migration Status**: ✅ **Complete** - Successfully migrated from STDIO to Streamable HTTP transport
-
-This server has been updated to use the modern Streamable HTTP transport as required by Smithery hosting platform. The migration includes:
-
-- **Modern Protocol**: Uses Streamable HTTP transport (protocol version 2025-03-26)
-- **Express.js Framework**: Built on Express.js for robust HTTP handling
-- **Session Management**: Supports stateful operations with proper session tracking
-- **MCP Endpoint**: All requests handled at `/mcp` endpoint
-- **Backwards Compatibility**: Maintains full compatibility with all existing tools and resources
-- **Enhanced Performance**: Improved scalability and better error handling
-
-### Testing the Migration
-
-**Local Testing**:
 ```bash
-# Start the server
+npm run test:live
+LIVE_TEST_VIDEO='https://youtu.be/VIDEO_ID' LIVE_TEST_QUERY='evaluation' npm run test:live
+```
+
+## Quick start — no API key
+
+Requirements: Node.js 20 or newer.
+
+The shortest local install uses stdio and needs no API key:
+
+```bash
+codex mcp add youtube-research -- npx -y @coyasong/youtube-mcp-server@latest
+```
+
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=youtube-research&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40coyasong%2Fyoutube-mcp-server%40latest%22%5D%7D)
+
+Or install from the VS Code command line:
+
+```bash
+code --add-mcp '{"name":"youtube-research","command":"npx","args":["-y","@coyasong/youtube-mcp-server@latest"]}'
+```
+
+For Claude Desktop, Cursor, and other stdio clients, use command `npx` with arguments `-y @coyasong/youtube-mcp-server@latest`.
+
+To run the Streamable HTTP transport instead:
+
+```bash
+git clone https://github.com/coyaSONG/youtube-mcp-server.git
+cd youtube-mcp-server
+npm install
+npm run build
 npm start
-
-# Test with MCP Inspector
-npx @modelcontextprotocol/inspector
-# Connect to: http://localhost:3000/mcp
 ```
 
-**Smithery Integration**:
-- The server is fully compatible with Smithery's new hosting requirements
-- All existing Claude Desktop integrations will continue to work seamlessly
-- No changes required for end users
-
-## Docker Deployment
-
-The project includes a Dockerfile for containerized deployment:
+The server starts at `http://localhost:3000/mcp` in `transcript-only` mode. Confirm it with:
 
 ```bash
-# Build the Docker image
-docker build -t youtube-mcp-server .
-
-# Run the container with HTTP transport
-docker run -p 3000:3000 --env-file .env youtube-mcp-server
+curl http://localhost:3000/health
 ```
 
-**Important**: The container now exposes port 3000 for HTTP-based MCP communication instead of STDIO.
+### Connect from Codex
+
+With the HTTP server running:
+
+```bash
+codex mcp add youtube-research --url http://localhost:3000/mcp
+```
+
+Then ask Codex:
+
+```text
+Use research-video to find what this video says about evaluation,
+and cite the exact moments: https://www.youtube.com/watch?v=VIDEO_ID
+```
+
+### Connect with MCP Inspector
+
+```bash
+npx @modelcontextprotocol/inspector
+# Connect to http://localhost:3000/mcp
+```
+
+### Install through Smithery
+
+```bash
+npx -y smithery@latest mcp add coyaSONG/youtube-mcp-server --client claude
+```
+
+## Enable search, comments, and analytics
+
+Set a YouTube Data API v3 key to switch from `transcript-only` to `full` mode:
+
+```bash
+export YOUTUBE_API_KEY=your_key_here
+npm start
+```
+
+`YOUTUBE_API_KEY` is optional. `PORT` defaults to `3000`.
+
+## Secure a remote deployment
+
+Do not expose a full-mode server publicly without authentication: unauthenticated users could consume your YouTube API quota. Set a strong bearer token and restrict browser origins when deploying outside localhost:
+
+```bash
+export MCP_BEARER_TOKEN='replace-with-a-long-random-secret'
+export CORS_ORIGIN='https://your-client.example'
+export MAX_SESSIONS=100
+export SESSION_IDLE_TIMEOUT_MS=1800000
+npm start
+```
+
+Connect Codex using an environment variable rather than writing the secret into its configuration:
+
+```bash
+export YOUTUBE_MCP_TOKEN='replace-with-a-long-random-secret'
+codex mcp add youtube-research \
+  --url https://your-server.example/mcp \
+  --bearer-token-env-var YOUTUBE_MCP_TOKEN
+```
+
+`/health` remains public for container health checks. MCP requests return `401` when authentication is enabled and the bearer token is missing or invalid. Idle sessions are removed automatically, and `MAX_SESSIONS` bounds memory use.
+
+## Best first tool
+
+`research-video` accepts:
+
+- `video`: a YouTube URL or 11-character video ID
+- `language`: optional caption language such as `en`, `ko`, or `ja`
+- `query`: optional phrase to find inside the transcript
+- `contextLines`: surrounding segments to retain, from 0 to 5
+- `matchMode`: `word` (default) or `substring`
+- `startSeconds` / `endSeconds`: optional time window
+- `offset`: result offset for pagination
+- `maxSegments`: response cap from 1 to 1,000 (default: 200)
+
+It returns structured JSON containing the canonical video URL, full caption-track duration and segment count, matching transcript segments, timestamps, directly navigable citation URLs, and pagination metadata. For long videos, use a `query` or time window first; follow `nextOffset` only when more evidence is needed.
+
+### Compare evidence across videos
+
+`research-videos` applies one focused query to 2–5 video URLs concurrently. It returns the same structured, timestamp-linked evidence for each source while capping results per video. This is useful for comparing interviews, checking whether multiple sources support a claim, or researching a topic across a short watchlist.
+
+```json
+{
+  "videos": [
+    "https://youtu.be/VIDEO_ONE",
+    "https://youtu.be/VIDEO_TWO"
+  ],
+  "query": "evaluation",
+  "maxSegmentsPerVideo": 10
+}
+```
+
+## Capability modes
+
+| Capability | No-key mode | With `YOUTUBE_API_KEY` |
+|---|:---:|:---:|
+| Transcript research, filtering, key moments, segmentation, summaries | Yes | Yes |
+| Video search and comments | No | Yes |
+| Video/channel metadata, statistics, trends, and comparisons | No | Yes |
+
+Captions must be available for the requested video. Age-restricted, private, region-restricted, or caption-disabled videos may not return a transcript.
+
+## Docker
+
+```bash
+docker build -t youtube-research-mcp .
+docker run --rm -p 3000:3000 youtube-research-mcp
+
+# Full mode
+docker run --rm -p 3000:3000 -e YOUTUBE_API_KEY=your_key youtube-research-mcp
+```
+
+## Development
+
+```bash
+npm run dev             # HTTP server from TypeScript
+npm test                # build and run all tests
+npm run test:live       # live public-video transcript and citation smoke test
+```
 
 ## API Reference
 
@@ -128,12 +210,16 @@ docker run -p 3000:3000 --env-file .env youtube-mcp-server
 ### Tools
 
 #### Basic Tools
+- `research-video` - Get citation-ready transcript evidence from a URL or video ID without an API key
+- `research-videos` - Compare timestamp-linked evidence across 2–5 videos without an API key
 - `search-videos` - Search for YouTube videos with advanced filtering options
 - `get-video-comments` - Get comments for a specific video
 - `get-video-transcript` - Get transcript for a specific video with optional language
 - `enhanced-transcript` - Advanced transcript extraction with filtering, search, and multi-video capabilities
 - `get-key-moments` - Extract key moments with timestamps from a video transcript for easier navigation
 - `get-segmented-transcript` - Divide a video transcript into segments for easier analysis
+
+Tools requiring `YOUTUBE_API_KEY` are search, comments, statistics, discovery, and channel analysis. `enhanced-transcript` needs the key only when `includeMetadata` is `true`.
 
 #### Statistical Tools
 - `get-video-stats` - Get statistical information for a specific video
@@ -235,7 +321,7 @@ youtube://transcript/dQw4w9WgXcQ?language=en
   }
 }
 
-// With smart segmentation for easier analysis
+// With duration-based segmentation for easier analysis
 {
   "type": "tool",
   "name": "enhanced-transcript",
@@ -244,7 +330,7 @@ youtube://transcript/dQw4w9WgXcQ?language=en
     "filters": {
       "segment": {
         "count": 5,
-        "method": "smart"  // Breaks at natural pauses
+        "method": "smart"  // Balances caption duration across segments
       }
     },
     "format": "timestamped",
@@ -262,7 +348,7 @@ youtube://transcript/dQw4w9WgXcQ?language=en
   "name": "get-key-moments",
   "parameters": {
     "videoId": "dQw4w9WgXcQ",
-    "maxMoments": "5"
+    "maxMoments": 5
   }
 }
 
@@ -272,7 +358,7 @@ youtube://transcript/dQw4w9WgXcQ?language=en
   "name": "get-segmented-transcript",
   "parameters": {
     "videoId": "dQw4w9WgXcQ",
-    "segmentCount": "4"
+    "segmentCount": 4
   }
 }
 
@@ -282,7 +368,7 @@ youtube://transcript/dQw4w9WgXcQ?language=en
   "name": "segment-by-segment-analysis",
   "parameters": {
     "videoId": "dQw4w9WgXcQ",
-    "segmentCount": "4"
+    "segmentCount": 4
   }
 }
 
@@ -294,7 +380,7 @@ youtube://transcript/dQw4w9WgXcQ?language=en
     "videoId": "dQw4w9WgXcQ",
     "language": "en",
     "summaryLength": "detailed",
-    "includeKeywords": "true"
+    "includeKeywords": true
   }
 }
 ```
@@ -303,7 +389,7 @@ youtube://transcript/dQw4w9WgXcQ?language=en
 
 The server handles various error conditions, including:
 
-- Invalid API key
+- Invalid or missing API key for Data API tools
 - Video or channel not found
 - Transcript not available
 - Network issues
@@ -316,4 +402,4 @@ MIT
 
 - [Model Context Protocol TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [YouTube Data API](https://developers.google.com/youtube/v3)
-- [YouTube Captions Scraper](https://github.com/algolia/youtube-captions-scraper)
+- [YouTube.js](https://github.com/LuanRT/YouTube.js)

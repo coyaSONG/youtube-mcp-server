@@ -1,0 +1,8 @@
+.git
+.github
+.env*
+dist
+node_modules
+npm-debug.log*
+tests
+AGENTS.md

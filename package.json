@@ -1,44 +1,82 @@
 {
   "name": "@coyasong/youtube-mcp-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "dist/index.js",
-  "module": "./src/index.ts",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
   "type": "module",
   "bin": {
-    "youtube-mcp-server": "./dist/index.js"
+    "youtube-mcp-server": "./dist/stdio-server.js",
+    "youtube-mcp-http": "./dist/http-server.js"
   },
+  "mcpName": "io.github.coyasong/youtube-research",
   "scripts": {
     "clean": "rm -rf dist",
     "prebuild": "rm -rf dist && mkdir -p dist",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "node --loader ts-node/esm src/index.ts"
+    "build": "npm run build:tsc",
+    "build:tsc": "tsc",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "test:live": "npm run build && node scripts/live-smoke.mjs",
+    "start": "npm run start:http",
+    "start:http": "node dist/http-server.js",
+    "dev": "npm run dev:http",
+    "dev:http": "node --loader ts-node/esm src/http-server.ts"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/coyaSONG/youtube-mcp-server.git"
   },
-  "keywords": [],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "server.json",
+    "docs"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "youtube",
+    "transcript",
+    "research",
+    "citations",
+    "ai-agents"
+  ],
   "author": "coyaSONG",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/coyaSONG/youtube-mcp-server/issues"
   },
   "homepage": "https://github.com/coyaSONG/youtube-mcp-server#readme",
-  "description": "",
+  "description": "Citation-ready YouTube transcripts, comments, and channel intelligence for AI agents over MCP",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "dotenv": "^16.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "googleapis": "^173.0.0",
     "node-cache": "^5.1.2",
-    "youtube-captions-scraper": "^2.0.3",
+    "youtubei.js": "^17.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",
-    "@types/node": "^22.13.14",
+    "@types/node": "^26.1.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "typescript": "^7.0.2"
   }
 }

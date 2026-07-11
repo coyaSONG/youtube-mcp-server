@@ -61,4 +61,5 @@ Desktop.ini
 /temp
 
 # MCP specific
-mcp-logs/ 
+mcp-logs/
+.smithery/

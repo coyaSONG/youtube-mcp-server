@@ -14,6 +14,7 @@ export interface SearchOptions {
   query: string;
   caseSensitive?: boolean;
   contextLines?: number;
+  matchMode?: 'substring' | 'word';
 }
 
 export interface TranscriptOptions {
@@ -72,4 +73,4 @@ export class TranscriptError extends Error {
     this.options = params.options;
     this.originalError = params.originalError;
   }
-} 
+}
