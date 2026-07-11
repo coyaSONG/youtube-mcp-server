@@ -26,6 +26,18 @@ try {
   assert.ok(result.structuredContent.returnedSegments <= 3);
   assert.match(result.structuredContent.citations[0].sourceUrl, /[?&]t=\d+s$/);
 
+  const fullTranscript = await client.callTool({
+    name: 'get-video-transcript',
+    arguments: { videoId: video },
+  });
+  assert.equal(fullTranscript.isError, undefined);
+  const fullCharacters = fullTranscript.content[0].text.length;
+  const focusedCharacters = result.content[0].text.length;
+  const characterReductionPercent = Number(
+    ((1 - focusedCharacters / fullCharacters) * 100).toFixed(1),
+  );
+  assert.ok(characterReductionPercent > 90);
+
   const moments = await client.callTool({
     name: 'get-key-moments',
     arguments: { videoId: video, maxMoments: 3 },
@@ -41,6 +53,9 @@ try {
     returned: result.structuredContent.returnedSegments,
     firstCitation: result.structuredContent.citations[0].sourceUrl,
     keyMoments: 3,
+    fullTranscriptCharacters: fullCharacters,
+    focusedResearchCharacters: focusedCharacters,
+    characterReductionPercent,
   }, null, 2));
 } finally {
   await client.close();

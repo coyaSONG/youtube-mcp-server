@@ -25,6 +25,23 @@ No YouTube API key is required for transcript research.
 - **Full YouTube intelligence** — optional API mode adds comments, video/channel statistics, trends, and comparisons.
 - **Remote-native MCP** — Streamable HTTP transport at `/mcp`, plus Docker and Smithery support.
 
+## Focused evidence, not a transcript dump
+
+The included live smoke test asks a focused question about a public video and compares the response with the full timestamped transcript:
+
+| Response | Characters returned |
+|---|---:|
+| Full transcript | 85,518 |
+| `research-video` (3 citations) | 970 |
+| Reduction | **98.9%** |
+
+This measures response characters, not model-specific tokens. Reproduce it against the default public fixture—or substitute your own video and query:
+
+```bash
+npm run test:live
+LIVE_TEST_VIDEO='https://youtu.be/VIDEO_ID' LIVE_TEST_QUERY='evaluation' npm run test:live
+```
+
 ## Quick start — no API key
 
 Requirements: Node.js 20 or newer.
