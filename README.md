@@ -147,6 +147,21 @@ codex mcp add youtube-research \
 
 It returns structured JSON containing the canonical video URL, full caption-track duration and segment count, matching transcript segments, timestamps, directly navigable citation URLs, and pagination metadata. For long videos, use a `query` or time window first; follow `nextOffset` only when more evidence is needed.
 
+### Compare evidence across videos
+
+`research-videos` applies one focused query to 2–5 video URLs concurrently. It returns the same structured, timestamp-linked evidence for each source while capping results per video. This is useful for comparing interviews, checking whether multiple sources support a claim, or researching a topic across a short watchlist.
+
+```json
+{
+  "videos": [
+    "https://youtu.be/VIDEO_ONE",
+    "https://youtu.be/VIDEO_TWO"
+  ],
+  "query": "evaluation",
+  "maxSegmentsPerVideo": 10
+}
+```
+
 ## Capability modes
 
 | Capability | No-key mode | With `YOUTUBE_API_KEY` |
@@ -188,6 +203,7 @@ npm run test:live       # live public-video transcript and citation smoke test
 
 #### Basic Tools
 - `research-video` - Get citation-ready transcript evidence from a URL or video ID without an API key
+- `research-videos` - Compare timestamp-linked evidence across 2–5 videos without an API key
 - `search-videos` - Search for YouTube videos with advanced filtering options
 - `get-video-comments` - Get comments for a specific video
 - `get-video-transcript` - Get transcript for a specific video with optional language

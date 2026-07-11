@@ -7,6 +7,7 @@ All notable changes to this project are documented here. This project follows [S
 ### Added
 
 - Citation-ready `research-video` tool with URL input, timestamp links, filtering, time ranges, and pagination.
+- Cross-video `research-videos` tool for applying one focused query to 2–5 sources concurrently.
 - Transcript-only mode that works without a YouTube Data API key.
 - Optional bearer authentication, CORS restriction, and bounded idle MCP sessions.
 - Health capability reporting, transport tests, CI, and a production container health check.

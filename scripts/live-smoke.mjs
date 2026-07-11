@@ -46,6 +46,19 @@ try {
   assert.match(moments.content[0].text, /youtube\.com\/watch\?v=.*&t=\d+s/);
   assert.doesNotMatch(moments.content[0].text, /# Full Transcript/);
 
+  const comparison = await client.callTool({
+    name: 'research-videos',
+    arguments: {
+      videos: [video, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+      query: 'the',
+      contextLines: 0,
+      maxSegmentsPerVideo: 1,
+    },
+  });
+  assert.equal(comparison.isError, undefined);
+  assert.equal(comparison.structuredContent.results.length, 2);
+  assert.ok(comparison.structuredContent.results.every((item) => item.returnedSegments === 1));
+
   console.log(JSON.stringify({
     status: 'ok',
     videoId: result.structuredContent.videoId,
@@ -56,6 +69,7 @@ try {
     fullTranscriptCharacters: fullCharacters,
     focusedResearchCharacters: focusedCharacters,
     characterReductionPercent,
+    comparedVideos: comparison.structuredContent.results.length,
   }, null, 2));
 } finally {
   await client.close();

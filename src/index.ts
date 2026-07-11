@@ -26,6 +26,109 @@ const READ_ONLY_TOOL_ANNOTATIONS = {
   openWorldHint: true,
 } as const;
 
+const researchOutputSchema = {
+  videoId: z.string(),
+  sourceUrl: z.string().url(),
+  language: z.string(),
+  query: z.string().nullable(),
+  matchMode: z.enum(['word', 'substring']).nullable(),
+  timeRange: z.object({
+    startSeconds: z.number().nullable(),
+    endSeconds: z.number().nullable(),
+  }),
+  totalTranscriptSegments: z.number().int().min(1),
+  totalAvailableSegments: z.number().int().min(0),
+  returnedSegments: z.number().int().min(0),
+  offset: z.number().int().min(0),
+  truncated: z.boolean(),
+  nextOffset: z.number().int().min(0).nullable(),
+  durationSeconds: z.number().min(0),
+  citations: z.array(z.object({
+    timestamp: z.string(),
+    seconds: z.number().min(0),
+    text: z.string(),
+    sourceUrl: z.string().url(),
+  })),
+} as const;
+
+interface ResearchVideoOptions {
+  video: string;
+  language?: string;
+  query?: string;
+  contextLines: number;
+  matchMode: 'word' | 'substring';
+  startSeconds?: number;
+  endSeconds?: number;
+  offset: number;
+  maxSegments: number;
+}
+
+async function researchVideo(
+  youtubeService: YouTubeService,
+  options: ResearchVideoOptions,
+) {
+  const {
+    video,
+    language,
+    query,
+    contextLines,
+    matchMode,
+    startSeconds,
+    endSeconds,
+    offset,
+    maxSegments,
+  } = options;
+  if (endSeconds !== undefined && startSeconds !== undefined && endSeconds <= startSeconds) {
+    throw new Error('endSeconds must be greater than startSeconds.');
+  }
+
+  const videoId = extractVideoId(video);
+  const fullTranscript = await youtubeService.getTranscript(videoId, { language });
+  const hasFilters = query !== undefined || startSeconds !== undefined || endSeconds !== undefined;
+  const segments = hasFilters
+    ? await youtubeService.getTranscript(videoId, {
+        language,
+        timeRange: startSeconds !== undefined || endSeconds !== undefined
+          ? { start: startSeconds, end: endSeconds }
+          : undefined,
+        search: query ? { query, contextLines, matchMode } : undefined,
+      })
+    : fullTranscript;
+  const durationSeconds = fullTranscript.reduce(
+    (maximum, segment) => Math.max(maximum, (segment.offset + segment.duration) / 1000),
+    0,
+  );
+  const selectedSegments = segments.slice(offset, offset + maxSegments);
+  const citations = selectedSegments.map((segment) => {
+    const seconds = segment.offset / 1000;
+    return {
+      timestamp: formatTime(segment.offset),
+      seconds,
+      text: segment.text,
+      sourceUrl: createTimestampUrl(videoId, seconds),
+    };
+  });
+
+  return {
+    videoId,
+    sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    language: language ?? 'default',
+    query: query ?? null,
+    matchMode: query ? matchMode : null,
+    timeRange: { startSeconds: startSeconds ?? null, endSeconds: endSeconds ?? null },
+    totalTranscriptSegments: fullTranscript.length,
+    totalAvailableSegments: segments.length,
+    returnedSegments: citations.length,
+    offset,
+    truncated: offset + citations.length < segments.length,
+    nextOffset: offset + citations.length < segments.length
+      ? offset + citations.length
+      : null,
+    durationSeconds,
+    citations,
+  };
+}
+
 // Export default function for Smithery
 export default function createServer({ config }: { config: z.infer<typeof configSchema> }) {
   // Initialize the YouTube service with the provided API key
@@ -309,30 +412,7 @@ export default function createServer({ config }: { config: z.infer<typeof config
         offset: z.number().int().min(0).optional().describe('Result offset for pagination'),
         maxSegments: z.number().int().min(1).max(1000).optional().describe('Maximum citations to return; defaults to 200'),
       },
-      outputSchema: {
-        videoId: z.string(),
-        sourceUrl: z.string().url(),
-        language: z.string(),
-        query: z.string().nullable(),
-        matchMode: z.enum(['word', 'substring']).nullable(),
-        timeRange: z.object({
-          startSeconds: z.number().nullable(),
-          endSeconds: z.number().nullable(),
-        }),
-        totalTranscriptSegments: z.number().int().min(1),
-        totalAvailableSegments: z.number().int().min(0),
-        returnedSegments: z.number().int().min(0),
-        offset: z.number().int().min(0),
-        truncated: z.boolean(),
-        nextOffset: z.number().int().min(0).nullable(),
-        durationSeconds: z.number().min(0),
-        citations: z.array(z.object({
-          timestamp: z.string(),
-          seconds: z.number().min(0),
-          text: z.string(),
-          sourceUrl: z.string().url(),
-        })),
-      },
+      outputSchema: researchOutputSchema,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({
@@ -347,54 +427,17 @@ export default function createServer({ config }: { config: z.infer<typeof config
       maxSegments = 200,
     }) => {
       try {
-        if (endSeconds !== undefined && startSeconds !== undefined && endSeconds <= startSeconds) {
-          throw new Error('endSeconds must be greater than startSeconds.');
-        }
-        const videoId = extractVideoId(video);
-        const fullTranscript = await youtubeService.getTranscript(videoId, { language });
-        const hasFilters = query !== undefined || startSeconds !== undefined || endSeconds !== undefined;
-        const segments = hasFilters
-          ? await youtubeService.getTranscript(videoId, {
-              language,
-              timeRange: startSeconds !== undefined || endSeconds !== undefined
-                ? { start: startSeconds, end: endSeconds }
-                : undefined,
-              search: query ? { query, contextLines, matchMode } : undefined,
-            })
-          : fullTranscript;
-        const durationSeconds = fullTranscript.reduce(
-          (maximum, segment) => Math.max(maximum, (segment.offset + segment.duration) / 1000),
-          0,
-        );
-        const selectedSegments = segments.slice(offset, offset + maxSegments);
-        const citations = selectedSegments.map((segment) => {
-          const seconds = segment.offset / 1000;
-          return {
-            timestamp: formatTime(segment.offset),
-            seconds,
-            text: segment.text,
-            sourceUrl: createTimestampUrl(videoId, seconds),
-          };
-        });
-
-        const result = {
-          videoId,
-          sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
-          language: language ?? 'default',
-          query: query ?? null,
-          matchMode: query ? matchMode : null,
-          timeRange: { startSeconds: startSeconds ?? null, endSeconds: endSeconds ?? null },
-          totalTranscriptSegments: fullTranscript.length,
-          totalAvailableSegments: segments.length,
-          returnedSegments: citations.length,
+        const result = await researchVideo(youtubeService, {
+          video,
+          language,
+          query,
+          contextLines,
+          matchMode,
+          startSeconds,
+          endSeconds,
           offset,
-          truncated: offset + citations.length < segments.length,
-          nextOffset: offset + citations.length < segments.length
-            ? offset + citations.length
-            : null,
-          durationSeconds,
-          citations,
-        };
+          maxSegments,
+        });
 
         return {
           content: [{
@@ -408,6 +451,61 @@ export default function createServer({ config }: { config: z.infer<typeof config
           content: [{
             type: 'text',
             text: `Failed to research video: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'research-videos',
+    {
+      title: 'Compare evidence across YouTube videos',
+      description: 'Run the same focused transcript query across 2 to 5 YouTube videos and return timestamp-linked evidence for comparison. No YouTube API key is required.',
+      inputSchema: {
+        videos: z.array(z.string().min(1)).min(2).max(5).describe('YouTube video IDs or URLs'),
+        query: z.string().min(1).describe('Phrase or word to find in every transcript'),
+        language: z.string().optional().describe('Optional caption language code'),
+        contextLines: z.number().int().min(0).max(3).optional(),
+        matchMode: z.enum(['word', 'substring']).optional(),
+        maxSegmentsPerVideo: z.number().int().min(1).max(100).optional(),
+      },
+      outputSchema: {
+        query: z.string(),
+        videosRequested: z.number().int().min(2).max(5),
+        results: z.array(z.object(researchOutputSchema)),
+      },
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async ({
+      videos,
+      query,
+      language,
+      contextLines = 1,
+      matchMode = 'word',
+      maxSegmentsPerVideo = 20,
+    }) => {
+      try {
+        const results = await Promise.all(videos.map((video) => researchVideo(youtubeService, {
+          video,
+          language,
+          query,
+          contextLines,
+          matchMode,
+          offset: 0,
+          maxSegments: maxSegmentsPerVideo,
+        })));
+        const result = { query, videosRequested: videos.length, results };
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text',
+            text: `Failed to research videos: ${error instanceof Error ? error.message : String(error)}`,
           }],
           isError: true,
         };
