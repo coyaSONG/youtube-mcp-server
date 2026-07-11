@@ -103,6 +103,7 @@ npx @modelcontextprotocol/inspector
 ### Install through Smithery
 
 ```bash
+npx -y smithery@latest auth login
 npx -y smithery@latest mcp add coyaSONG/youtube-mcp-server --client claude
 ```
 
@@ -196,6 +197,7 @@ docker run --rm -p 3000:3000 -e YOUTUBE_API_KEY=your_key youtube-research-mcp
 npm run dev             # HTTP server from TypeScript
 npm test                # build and run all tests
 npm run test:live       # live public-video transcript and citation smoke test
+npm run test:user       # clean-room smoke test against the published npm package
 ```
 
 ## API Reference

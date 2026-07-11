@@ -25,6 +25,7 @@
     "prepublishOnly": "npm test",
     "test": "npm run build && node --test tests/*.test.mjs",
     "test:live": "npm run build && node scripts/live-smoke.mjs",
+    "test:user": "node scripts/virtual-user-smoke.mjs",
     "start": "npm run start:http",
     "start:http": "node dist/http-server.js",
     "dev": "npm run dev:http",
