@@ -2,7 +2,13 @@
 
 All notable changes to this project are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.1] - 2026-07-11
+
+### Fixed
+
+- Match the official MCP Registry namespace to the case-sensitive GitHub account name.
+
+## [1.1.0] - 2026-07-11
 
 ### Added
 
