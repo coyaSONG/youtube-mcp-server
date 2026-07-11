@@ -50,6 +50,9 @@ Desktop.ini
 # Cursor
 .cursor
 
+# Claude
+.claude
+
 # Coverage directory
 /coverage
 
