@@ -1,31 +1,94 @@
 import { google, youtube_v3 } from 'googleapis';
-import dotenv from 'dotenv';
-import { getSubtitles } from 'youtube-captions-scraper';
 import NodeCache from 'node-cache';
+import { Innertube } from 'youtubei.js';
 import { TranscriptSegment, TranscriptOptions, FormattedTranscript, TranscriptError, TimeRange, SearchOptions } from './types/youtube-types.js';
-
-dotenv.config();
+import { Json3CaptionResponse, parseJson3Transcript } from './transcript-parser.js';
+import { segmentTranscript } from './transcript-processing.js';
 
 const TRANSCRIPT_CACHE_TTL = 3600; // Cache transcripts for 1 hour
+const TRANSCRIPT_CACHE_MAX_KEYS = 500;
 
 export class YouTubeService {
+  private static readonly transcriptCache = new NodeCache({
+    stdTTL: TRANSCRIPT_CACHE_TTL,
+    maxKeys: TRANSCRIPT_CACHE_MAX_KEYS,
+  });
+  private static innertubePromise?: Promise<Innertube>;
+
   public youtube: youtube_v3.Youtube;
-  private transcriptCache: NodeCache;
   private apiKey: string;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.YOUTUBE_API_KEY || '';
     
-    if (!this.apiKey) {
-      console.error('Warning: YouTube API key not provided');
-      console.error('YouTube API functionality will be limited');
-    }
-
     this.youtube = google.youtube({
       version: 'v3',
       auth: this.apiKey
     });
-    this.transcriptCache = new NodeCache({ stdTTL: TRANSCRIPT_CACHE_TTL });
+  }
+
+  get hasApiKey(): boolean {
+    return this.apiKey.length > 0;
+  }
+
+  requireApiKey(): void {
+    if (!this.hasApiKey) {
+      throw new Error(
+        'This tool requires YOUTUBE_API_KEY. Transcript research tools work without an API key.',
+      );
+    }
+  }
+
+  private getInnertube(): Promise<Innertube> {
+    YouTubeService.innertubePromise ??= Innertube.create();
+    return YouTubeService.innertubePromise;
+  }
+
+  private async fetchTranscript(videoId: string, language?: string): Promise<TranscriptSegment[]> {
+    const innertube = await this.getInnertube();
+    const videoInfo = await innertube.getBasicInfo(videoId, { client: 'ANDROID_VR' });
+    const tracks = videoInfo.captions?.caption_tracks ?? [];
+
+    if (tracks.length === 0) {
+      throw new Error('No caption tracks are available for this video.');
+    }
+
+    const exactTracks = language
+      ? tracks.filter((track) => track.language_code.toLowerCase() === language.toLowerCase())
+      : tracks;
+    const track = exactTracks.find((candidate) => candidate.kind !== 'asr')
+      ?? exactTracks[0]
+      ?? tracks.find((candidate) => candidate.kind !== 'asr')
+      ?? tracks[0];
+
+    if (!track) {
+      throw new Error(`No captions are available for language ${language}.`);
+    }
+
+    const captionUrl = new URL(track.base_url);
+    captionUrl.searchParams.set('fmt', 'json3');
+    if (language && track.language_code.toLowerCase() !== language.toLowerCase()) {
+      if (!track.is_translatable) {
+        throw new Error(`No captions are available for language ${language}.`);
+      }
+      captionUrl.searchParams.set('tlang', language);
+    }
+
+    const response = await fetch(captionUrl, {
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; YouTubeResearchMCP/1.1)' },
+    });
+    if (!response.ok) {
+      throw new Error(`Caption request failed with HTTP ${response.status}.`);
+    }
+
+    const data = await response.json() as Json3CaptionResponse;
+    const segments = parseJson3Transcript(data);
+
+    if (segments.length === 0) {
+      throw new Error('YouTube returned an empty caption track.');
+    }
+
+    return segments;
   }
 
   async searchVideos(
@@ -43,6 +106,7 @@ export class YouTubeService {
       regionCode?: string;
     } = {}
   ): Promise<youtube_v3.Schema$SearchListResponse> {
+    this.requireApiKey();
     try {
       const response = await this.youtube.search.list({
         part: ['snippet'],
@@ -66,6 +130,7 @@ export class YouTubeService {
   }
 
   async getVideoDetails(videoId: string): Promise<youtube_v3.Schema$VideoListResponse> {
+    this.requireApiKey();
     try {
       const response = await this.youtube.videos.list({
         part: ['snippet', 'contentDetails', 'statistics'],
@@ -79,6 +144,7 @@ export class YouTubeService {
   }
 
   async getChannelDetails(channelId: string): Promise<youtube_v3.Schema$ChannelListResponse> {
+    this.requireApiKey();
     try {
       const response = await this.youtube.channels.list({
         part: ['snippet', 'statistics'],
@@ -100,6 +166,7 @@ export class YouTubeService {
       includeReplies?: boolean;
     } = {}
   ): Promise<youtube_v3.Schema$CommentThreadListResponse> {
+    this.requireApiKey();
     try {
       const { order = 'relevance', pageToken, includeReplies = false } = options;
 
@@ -138,21 +205,15 @@ export class YouTubeService {
       : langOrOptions || {};
 
     const cacheKey = this.generateTranscriptCacheKey(videoId, options);
-    const cachedTranscript = this.transcriptCache.get<TranscriptSegment[]>(cacheKey);
+    const cachedTranscript = YouTubeService.transcriptCache.get<TranscriptSegment[]>(cacheKey);
 
     if (cachedTranscript) {
       return this.processTranscript(cachedTranscript, options);
     }
 
     try {
-      const scraperOptions: { videoID: string; lang?: string } = { videoID: videoId };
-
-      if (options.language) {
-        scraperOptions.lang = options.language;
-      }
-
-      const captions = await getSubtitles(scraperOptions);
-      this.transcriptCache.set(cacheKey, captions);
+      const captions = await this.fetchTranscript(videoId, options.language);
+      YouTubeService.transcriptCache.set(cacheKey, captions);
 
       return this.processTranscript(captions, options);
     } catch (error) {
@@ -190,8 +251,9 @@ export class YouTubeService {
         combinedSegments = [...combinedSegments, ...segments];
       });
 
-      const videoDetailsPromises = videoIds.map(id => this.getVideoDetails(id));
-      const videoDetails = await Promise.all(videoDetailsPromises);
+      const videoDetails = options.includeMetadata
+        ? await Promise.all(videoIds.map(id => this.getVideoDetails(id)))
+        : [];
 
       // Process and format the transcript
       const processedTranscript = this.processTranscript(combinedSegments, options);
@@ -226,7 +288,11 @@ export class YouTubeService {
 
     // Apply segment splitting if specified
     if (options.segment) {
-      processedSegments = this.segmentTranscript(processedSegments, options.segment);
+      processedSegments = segmentTranscript(
+        processedSegments,
+        options.segment.method,
+        options.segment.count,
+      );
     }
 
     return processedSegments;
@@ -254,7 +320,7 @@ export class YouTubeService {
     segments: TranscriptSegment[],
     search: SearchOptions
   ): TranscriptSegment[] {
-    const { query, caseSensitive = false, contextLines = 0 } = search;
+    const { query, caseSensitive = false, contextLines = 0, matchMode = 'substring' } = search;
 
     if (!query || query.trim() === '') {
       return segments;
@@ -266,8 +332,11 @@ export class YouTubeService {
     segments.forEach((segment, index) => {
       const text = caseSensitive ? segment.text : segment.text.toLowerCase();
       const searchText = caseSensitive ? query : query.toLowerCase();
+      const isMatch = matchMode === 'word'
+        ? new RegExp(`(?:^|\\W)${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|\\W)`).test(text)
+        : text.includes(searchText);
 
-      if (text.includes(searchText)) {
+      if (isMatch) {
         matchedIndices.push(index);
       }
     });
@@ -297,56 +366,6 @@ export class YouTubeService {
     return Array.from(indicesWithContext)
       .sort((a, b) => a - b)
       .map(index => segments[index]);
-  }
-
-  private segmentTranscript(
-    segments: TranscriptSegment[],
-    segmentOptions: { method: 'equal' | 'smart', count: number }
-  ): TranscriptSegment[] {
-    const { method = 'equal', count = 1 } = segmentOptions;
-
-    if (count <= 1 || segments.length <= count) {
-      return segments;
-    }
-
-    if (method === 'equal') {
-      // Split into equal segments
-      const segmentSize = Math.ceil(segments.length / count);
-      const result: TranscriptSegment[][] = [];
-
-      for (let i = 0; i < segments.length; i += segmentSize) {
-        result.push(segments.slice(i, i + segmentSize));
-      }
-
-      return result.flat();
-    } else {
-      // Smart segmentation based on content
-      // This would ideally use NLP to find natural segment boundaries
-      // For now, we'll use a simple approach
-      const totalDuration = segments.reduce((sum, segment) => sum + segment.duration, 0);
-      const durationPerSegment = totalDuration / count;
-
-      const result: TranscriptSegment[][] = [];
-      let currentSegment: TranscriptSegment[] = [];
-      let currentDuration = 0;
-
-      segments.forEach(segment => {
-        currentSegment.push(segment);
-        currentDuration += segment.duration;
-
-        if (currentDuration >= durationPerSegment && result.length < count - 1) {
-          result.push(currentSegment);
-          currentSegment = [];
-          currentDuration = 0;
-        }
-      });
-
-      if (currentSegment.length > 0) {
-        result.push(currentSegment);
-      }
-
-      return result.flat();
-    }
   }
 
   private formatTranscript(
@@ -410,9 +429,9 @@ export class YouTubeService {
       // Get full transcript
       const transcriptData = await this.getTranscript(videoId);
 
-      // Get video details for title and other metadata
-      const videoData = await this.getVideoDetails(videoId);
-      const video = videoData.items?.[0];
+      const video = this.hasApiKey
+        ? (await this.getVideoDetails(videoId)).items?.[0]
+        : undefined;
 
       if (!transcriptData.length) {
         throw new Error('No transcript available for this video');
@@ -454,12 +473,25 @@ export class YouTubeService {
         });
       }
 
-      // Identify key moments (simple approach: paragraphs with the most content)
-      // In a real implementation, this would use NLP to identify important moments
       const keyMoments = paragraphs
-        .filter(p => p.text.length > 100) // Filter out short paragraphs
-        .sort((a, b) => b.text.length - a.text.length) // Sort by length (simple heuristic)
-        .slice(0, maxMoments); // Take only the top N moments
+        .map((paragraph) => {
+          const words = paragraph.text.toLocaleLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+          const uniqueWords = new Set(words.filter((word) => word.length > 2));
+          return {
+            ...paragraph,
+            score: uniqueWords.size / Math.sqrt(Math.max(words.length, 1)),
+          };
+        })
+        .filter((paragraph) => paragraph.text.length > 100)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxMoments)
+        .sort((a, b) => a.startTime - b.startTime);
+
+      const keyMomentSegments: TranscriptSegment[] = keyMoments.map((moment) => ({
+        text: moment.text,
+        offset: moment.startTime * 1000,
+        duration: (moment.endTime - moment.startTime) * 1000,
+      }));
 
       // Create formatted output
       const title = video?.snippet?.title || 'Video Transcript';
@@ -467,18 +499,13 @@ export class YouTubeService {
 
       keyMoments.forEach((moment, index) => {
         const timeFormatted = this.formatTimestamp(moment.startTime * 1000);
-        formattedText += `## Key Moment ${index + 1} [${timeFormatted}]\n${moment.text}\n\n`;
+        const sourceUrl = `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(moment.startTime)}s`;
+        formattedText += `## Key Moment ${index + 1} [${timeFormatted}](${sourceUrl})\n${moment.text}\n\n`;
       });
 
-      // Add full transcript at the end
-      formattedText += `\n# Full Transcript\n\n`;
-      formattedText += transcriptData.map(segment =>
-        `[${this.formatTimestamp(segment.offset)}] ${segment.text}`
-      ).join('\n');
-
       return {
-        segments: transcriptData,
-        totalSegments: transcriptData.length,
+        segments: keyMomentSegments,
+        totalSegments: keyMomentSegments.length,
         duration: (transcriptData[transcriptData.length - 1].offset +
                  transcriptData[transcriptData.length - 1].duration) / 1000,
         format: 'timestamped',
@@ -514,9 +541,9 @@ export class YouTubeService {
       // Get full transcript
       const transcriptData = await this.getTranscript(videoId);
 
-      // Get video details for title and other metadata
-      const videoData = await this.getVideoDetails(videoId);
-      const video = videoData.items?.[0];
+      const video = this.hasApiKey
+        ? (await this.getVideoDetails(videoId)).items?.[0]
+        : undefined;
 
       if (!transcriptData.length) {
         throw new Error('No transcript available for this video');

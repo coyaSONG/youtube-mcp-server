@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">YouTube Research MCP workflow</title>
+  <desc id="description">A YouTube URL becomes focused, timestamp-linked transcript evidence for an AI agent.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="1" stop-color="#171b34"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff4d4d"/>
+      <stop offset="1" stop-color="#ff8a4c"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" rx="30" fill="url(#background)"/>
+  <circle cx="1090" cy="75" r="190" fill="#ff5151" opacity="0.08"/>
+  <circle cx="80" cy="590" r="240" fill="#6b7cff" opacity="0.08"/>
+
+  <g transform="translate(72 62)">
+    <rect width="58" height="40" rx="12" fill="url(#accent)"/>
+    <path d="M24 12l16 8-16 8z" fill="#fff"/>
+    <text x="76" y="29" fill="#f7f8ff" font-family="Inter,Arial,sans-serif" font-size="30" font-weight="700">YouTube Research MCP</text>
+    <text x="0" y="82" fill="#aeb6d5" font-family="Inter,Arial,sans-serif" font-size="20">Citation-ready video evidence for AI agents — no API key required</text>
+  </g>
+
+  <g transform="translate(72 188)" filter="url(#shadow)">
+    <rect width="1056" height="96" rx="20" fill="#202641" stroke="#343d66"/>
+    <text x="28" y="34" fill="#8993b7" font-family="ui-monospace,SFMono-Regular,monospace" font-size="15">INPUT</text>
+    <text x="28" y="67" fill="#f7f8ff" font-family="ui-monospace,SFMono-Regular,monospace" font-size="20">research-video  video=https://youtu.be/VIDEO_ID  query="evaluation"</text>
+  </g>
+
+  <g transform="translate(72 322)" filter="url(#shadow)">
+    <rect width="1056" height="232" rx="20" fill="#11162b" stroke="#343d66"/>
+    <text x="28" y="37" fill="#8993b7" font-family="ui-monospace,SFMono-Regular,monospace" font-size="15">FOCUSED EVIDENCE</text>
+
+    <g transform="translate(28 64)">
+      <rect width="1000" height="56" rx="12" fill="#1c233d"/>
+      <rect width="84" height="56" rx="12" fill="#293052"/>
+      <text x="20" y="35" fill="#ff8a6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="18" font-weight="700">01:42</text>
+      <text x="108" y="35" fill="#edf0ff" font-family="Inter,Arial,sans-serif" font-size="18">…the evaluation should measure the behavior you actually care about…</text>
+    </g>
+
+    <g transform="translate(28 132)">
+      <rect width="1000" height="56" rx="12" fill="#1c233d"/>
+      <rect width="84" height="56" rx="12" fill="#293052"/>
+      <text x="20" y="35" fill="#ff8a6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="18" font-weight="700">03:18</text>
+      <text x="108" y="35" fill="#edf0ff" font-family="Inter,Arial,sans-serif" font-size="18">…timestamped source links let the agent verify every cited moment…</text>
+    </g>
+
+    <text x="28" y="216" fill="#7f89ad" font-family="ui-monospace,SFMono-Regular,monospace" font-size="15">2,430 transcript segments → 27 matches → 3 citations returned</text>
+    <text x="1028" y="216" text-anchor="end" fill="#74d7a0" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">OPEN EXACT MOMENT ↗</text>
+  </g>
+
+  <text x="600" y="604" text-anchor="middle" fill="#737d9f" font-family="Inter,Arial,sans-serif" font-size="15">Codex · Claude · Cursor · any MCP client</text>
+</svg>

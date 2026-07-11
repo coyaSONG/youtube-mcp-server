@@ -3,10 +3,11 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { z } from 'zod';
 import { YouTubeService } from './youtube-service.js';
 import { TranscriptOptions } from './types/youtube-types.js';
+import { createTimestampUrl, extractVideoId } from './youtube-url.js';
 
 // Configuration schema for Smithery
 export const configSchema = z.object({
-  youtubeApiKey: z.string().describe("YouTube Data API v3 key"),
+  youtubeApiKey: z.string().optional().describe("Optional YouTube Data API v3 key for search, comments, and statistics"),
   port: z.string().optional().describe("Server port").default("3000")
 });
 
@@ -18,15 +19,22 @@ function formatTime(milliseconds: number): string {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
+const READ_ONLY_TOOL_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+} as const;
+
 // Export default function for Smithery
-export default function ({ config }: { config: z.infer<typeof configSchema> }) {
+export default function createServer({ config }: { config: z.infer<typeof configSchema> }) {
   // Initialize the YouTube service with the provided API key
   const youtubeService = new YouTubeService(config.youtubeApiKey);
 
   // Create the MCP server
   const server = new McpServer({
-    name: 'YouTube MCP Server',
-    version: '1.0.0'
+    name: 'YouTube Research MCP',
+    version: '1.1.0'
   });
 
   // Define resources
@@ -146,19 +154,6 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
         // Ensure videoId is a string, not an array
         const videoIdStr = Array.isArray(videoId) ? videoId[0] : videoId;
 
-        // Get video details for metadata
-        const videoData = await youtubeService.getVideoDetails(videoIdStr);
-        const video = videoData.items?.[0];
-
-        if (!video) {
-          return {
-            contents: [{
-              uri: uri.href,
-              text: `Video with ID ${videoIdStr} not found.`
-            }]
-          };
-        }
-
         try {
           // Get transcript
           const transcriptData = await youtubeService.getTranscript(videoIdStr, language || undefined);
@@ -170,9 +165,7 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
 
           // Create metadata
           const metadata = {
-            videoId: video.id,
-            title: video.snippet?.title,
-            channelTitle: video.snippet?.channelTitle,
+            videoId: videoIdStr,
             language: language || 'default',
             captionCount: transcriptData.length
           };
@@ -180,7 +173,7 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
           return {
             contents: [{
               uri: uri.href,
-              text: `# Transcript for: ${metadata.title}\n\n${formattedTranscript}`
+              text: `# Transcript for: ${videoIdStr}\n\n${formattedTranscript}`
             }],
             metadata
           };
@@ -206,7 +199,7 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
   // Define tools
   server.tool(
     'search-videos',
-    'Search for YouTube videos with advanced filtering options. Supports parameters: \
+    '[Requires YOUTUBE_API_KEY] Search for YouTube videos with advanced filtering options. Supports parameters: \
 - query: Search term (required) \
 - maxResults: Number of results to return (1-50) \
 - channelId: Filter by specific channel \
@@ -230,6 +223,7 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
       videoDefinition: z.enum(['any', 'high', 'standard']).optional(),
       regionCode: z.string().length(2).optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ query, maxResults = 10, channelId, order, type, videoDuration, publishedAfter, publishedBefore, videoCaption, videoDefinition, regionCode }) => {
       try {
         const searchResults = await youtubeService.searchVideos(query, maxResults, {
@@ -264,7 +258,7 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
 
   server.tool(
     'get-video-comments',
-    'Retrieve comments for a specific YouTube video with sorting options',
+    '[Requires YOUTUBE_API_KEY] Retrieve comments for a specific YouTube video with sorting options',
     {
       videoId: z.string().min(1),
       maxResults: z.number().min(1).max(100).optional(),
@@ -272,6 +266,7 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
       includeReplies: z.boolean().optional(),
       pageToken: z.string().optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ videoId, maxResults = 20, order = 'relevance', includeReplies = false, pageToken }) => {
       try {
         const commentsData = await youtubeService.getComments(videoId, maxResults, {
@@ -298,16 +293,140 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
     }
   );
 
+  server.registerTool(
+    'research-video',
+    {
+      title: 'Research a YouTube video',
+      description: 'Extract a citation-ready YouTube transcript without requiring a YouTube API key. Accepts a video ID or URL and returns timestamped source links that agents can cite and open directly.',
+      inputSchema: {
+        video: z.string().min(1).describe('YouTube video ID or URL'),
+        language: z.string().optional().describe('Caption language code, for example en, ko, or ja'),
+        query: z.string().min(1).optional().describe('Return only matching transcript segments'),
+        contextLines: z.number().int().min(0).max(5).optional().describe('Nearby segments to include around query matches'),
+        matchMode: z.enum(['word', 'substring']).optional().describe('Whole-word matching is the default'),
+        startSeconds: z.number().min(0).optional().describe('Only inspect captions at or after this time'),
+        endSeconds: z.number().min(0).optional().describe('Only inspect captions at or before this time'),
+        offset: z.number().int().min(0).optional().describe('Result offset for pagination'),
+        maxSegments: z.number().int().min(1).max(1000).optional().describe('Maximum citations to return; defaults to 200'),
+      },
+      outputSchema: {
+        videoId: z.string(),
+        sourceUrl: z.string().url(),
+        language: z.string(),
+        query: z.string().nullable(),
+        matchMode: z.enum(['word', 'substring']).nullable(),
+        timeRange: z.object({
+          startSeconds: z.number().nullable(),
+          endSeconds: z.number().nullable(),
+        }),
+        totalTranscriptSegments: z.number().int().min(1),
+        totalAvailableSegments: z.number().int().min(0),
+        returnedSegments: z.number().int().min(0),
+        offset: z.number().int().min(0),
+        truncated: z.boolean(),
+        nextOffset: z.number().int().min(0).nullable(),
+        durationSeconds: z.number().min(0),
+        citations: z.array(z.object({
+          timestamp: z.string(),
+          seconds: z.number().min(0),
+          text: z.string(),
+          sourceUrl: z.string().url(),
+        })),
+      },
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async ({
+      video,
+      language,
+      query,
+      contextLines = 1,
+      matchMode = 'word',
+      startSeconds,
+      endSeconds,
+      offset = 0,
+      maxSegments = 200,
+    }) => {
+      try {
+        if (endSeconds !== undefined && startSeconds !== undefined && endSeconds <= startSeconds) {
+          throw new Error('endSeconds must be greater than startSeconds.');
+        }
+        const videoId = extractVideoId(video);
+        const fullTranscript = await youtubeService.getTranscript(videoId, { language });
+        const hasFilters = query !== undefined || startSeconds !== undefined || endSeconds !== undefined;
+        const segments = hasFilters
+          ? await youtubeService.getTranscript(videoId, {
+              language,
+              timeRange: startSeconds !== undefined || endSeconds !== undefined
+                ? { start: startSeconds, end: endSeconds }
+                : undefined,
+              search: query ? { query, contextLines, matchMode } : undefined,
+            })
+          : fullTranscript;
+        const durationSeconds = fullTranscript.reduce(
+          (maximum, segment) => Math.max(maximum, (segment.offset + segment.duration) / 1000),
+          0,
+        );
+        const selectedSegments = segments.slice(offset, offset + maxSegments);
+        const citations = selectedSegments.map((segment) => {
+          const seconds = segment.offset / 1000;
+          return {
+            timestamp: formatTime(segment.offset),
+            seconds,
+            text: segment.text,
+            sourceUrl: createTimestampUrl(videoId, seconds),
+          };
+        });
+
+        const result = {
+          videoId,
+          sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          language: language ?? 'default',
+          query: query ?? null,
+          matchMode: query ? matchMode : null,
+          timeRange: { startSeconds: startSeconds ?? null, endSeconds: endSeconds ?? null },
+          totalTranscriptSegments: fullTranscript.length,
+          totalAvailableSegments: segments.length,
+          returnedSegments: citations.length,
+          offset,
+          truncated: offset + citations.length < segments.length,
+          nextOffset: offset + citations.length < segments.length
+            ? offset + citations.length
+            : null,
+          durationSeconds,
+          citations,
+        };
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text',
+            text: `Failed to research video: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+          isError: true,
+        };
+      }
+    },
+  );
+
   server.tool(
     'get-video-transcript',
     'Get the transcript/captions for a YouTube video with optional language selection. This tool retrieves the full transcript of a video with timestamped captions. Each caption includes the text and its timestamp in the video. Parameters: videoId (required) - The YouTube video ID; language (optional) - Language code for the transcript (e.g., "en", "ko", "ja"). If not specified, the default language for the video will be used. Returns a text with each caption line preceded by its timestamp.',
     {
-      videoId: z.string().min(1),
+      videoId: z.string().min(1).describe('YouTube video ID or URL'),
       language: z.string().optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ videoId, language }) => {
       try {
-        const transcriptData = await youtubeService.getTranscript(videoId, language);
+        const resolvedVideoId = extractVideoId(videoId);
+        const transcriptData = await youtubeService.getTranscript(resolvedVideoId, language);
 
         // Optionally format the transcript for better readability
         const formattedTranscript = transcriptData.map(caption =>
@@ -335,10 +454,11 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
   // Additional tools
   server.tool(
     'get-video-stats',
-    'Get statistical information for a specific YouTube video (views, likes, comments, upload date, etc.)',
+    '[Requires YOUTUBE_API_KEY] Get statistical information for a specific YouTube video (views, likes, comments, upload date, etc.)',
     {
       videoId: z.string().min(1)
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ videoId }) => {
       try {
         const videoData = await youtubeService.getVideoDetails(videoId);
@@ -385,10 +505,11 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
 
   server.tool(
     'get-channel-stats',
-    'Get statistical information for a specific YouTube channel (subscriber count, total views, video count, etc.)',
+    '[Requires YOUTUBE_API_KEY] Get statistical information for a specific YouTube channel (subscriber count, total views, video count, etc.)',
     {
       channelId: z.string().min(1)
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ channelId }) => {
       try {
         const channelData = await youtubeService.getChannelDetails(channelId);
@@ -434,10 +555,11 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
 
   server.tool(
     'compare-videos',
-    'Compare statistics for multiple YouTube videos',
+    '[Requires YOUTUBE_API_KEY] Compare statistics for multiple YouTube videos',
     {
       videoIds: z.array(z.string()).min(2).max(10)
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ videoIds }) => {
       try {
         const results = [];
@@ -478,14 +600,16 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
 
   server.tool(
     'get-trending-videos',
-    'Retrieve trending videos by region and category. This helps analyze current popular content trends.',
+    '[Requires YOUTUBE_API_KEY] Retrieve trending videos by region and category. This helps analyze current popular content trends.',
     {
       regionCode: z.string().length(2).optional(),
       categoryId: z.string().optional(),
       maxResults: z.number().min(1).max(50).optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ regionCode = 'US', categoryId, maxResults = 10 }) => {
       try {
+        youtubeService.requireApiKey();
         const response = await youtubeService.youtube.videos.list({
           part: ['snippet', 'contentDetails', 'statistics'],
           chart: 'mostPopular',
@@ -524,12 +648,14 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
 
   server.tool(
     'get-video-categories',
-    'Retrieve available video categories for a specific region',
+    '[Requires YOUTUBE_API_KEY] Retrieve available video categories for a specific region',
     {
       regionCode: z.string().length(2).optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ regionCode = 'US' }) => {
       try {
+        youtubeService.requireApiKey();
         const response = await youtubeService.youtube.videoCategories.list({
           part: ['snippet'],
           regionCode
@@ -560,14 +686,16 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
 
   server.tool(
     'analyze-channel-videos',
-    'Analyze recent videos from a specific channel to identify performance trends',
+    '[Requires YOUTUBE_API_KEY] Analyze recent videos from a specific channel to identify performance trends',
     {
       channelId: z.string().min(1),
       maxResults: z.number().min(1).max(50).optional(),
       sortBy: z.enum(['date', 'viewCount', 'rating']).optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ channelId, maxResults = 10, sortBy = 'date' }) => {
       try {
+        youtubeService.requireApiKey();
         // First get all videos from the channel
         const searchResponse = await youtubeService.youtube.search.list({
           part: ['snippet'],
@@ -684,6 +812,7 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
         }).optional()
       }).optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ videoIds, language, format, includeMetadata, filters }) => {
       try {
         const options: TranscriptOptions = {
@@ -726,17 +855,16 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
 
   server.tool(
     'get-key-moments',
-    'Extract key moments with timestamps from a video transcript for easier navigation and summarization. This tool analyzes the video transcript to identify important segments based on content density and creates a structured output with timestamped key moments. Useful for quickly navigating to important parts of longer videos. Parameters: videoId (required) - The YouTube video ID; maxMoments (optional) - Number of key moments to extract (default: 5, max: 10). Returns a formatted text with key moments and their timestamps, plus the full transcript.',
+    'Extract concise, timestamp-linked key moments from a video transcript without returning the full transcript. Useful for quickly navigating longer videos. Parameters: videoId (required) - A YouTube video ID or URL; maxMoments (optional) - Number of key moments to extract (default: 5, max: 10).',
     {
-      videoId: z.string().min(1),
-      maxMoments: z.string().optional()
+      videoId: z.string().min(1).describe('YouTube video ID or URL'),
+      maxMoments: z.number().int().min(1).max(10).optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ videoId, maxMoments }) => {
       try {
-        // 문자열 maxMoments를 숫자로 변환
-        const maxMomentsNum = maxMoments ? parseInt(maxMoments, 10) : 5;
-
-        const keyMomentsTranscript = await youtubeService.getKeyMomentsTranscript(videoId, maxMomentsNum);
+        const resolvedVideoId = extractVideoId(videoId);
+        const keyMomentsTranscript = await youtubeService.getKeyMomentsTranscript(resolvedVideoId, maxMoments ?? 5);
 
         return {
           content: [{
@@ -760,15 +888,14 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
     'get-segmented-transcript',
     'Divide a video transcript into segments for easier analysis and navigation. This tool splits the video into equal time segments and extracts the transcript for each segment with proper timestamps. Ideal for analyzing the structure of longer videos or when you need to focus on specific parts of the content. Parameters: videoId (required) - The YouTube video ID; segmentCount (optional) - Number of segments to divide the video into (default: 4, max: 10). Returns a markdown-formatted text with each segment clearly labeled with time ranges and containing the relevant transcript text.',
     {
-      videoId: z.string().min(1),
-      segmentCount: z.string().optional()
+      videoId: z.string().min(1).describe('YouTube video ID or URL'),
+      segmentCount: z.number().int().min(2).max(10).optional()
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ videoId, segmentCount }) => {
       try {
-        // 문자열 segmentCount를 숫자로 변환
-        const segmentCountNum = segmentCount ? parseInt(segmentCount, 10) : 4;
-
-        const segmentedTranscript = await youtubeService.getSegmentedTranscript(videoId, segmentCountNum);
+        const resolvedVideoId = extractVideoId(videoId);
+        const segmentedTranscript = await youtubeService.getSegmentedTranscript(resolvedVideoId, segmentCount ?? 4);
 
         return {
           content: [{
@@ -792,18 +919,13 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
     'segment-by-segment-analysis',
     'Analyze a YouTube video segment by segment for a detailed breakdown of content. This prompt divides the video into the specified number of segments and provides a comprehensive analysis of each part. Particularly useful for longer videos where the content changes throughout or for educational videos with multiple topics. The analysis includes key points, important quotes, and how each segment connects to the overall theme. Parameters: videoId (required) - The YouTube video ID; segmentCount (optional) - Number of segments to divide the video into (default: 4, range: 2-8).',
     {
-      videoId: z.string().min(1),
-      segmentCount: z.string().optional(),
+      videoId: z.string().min(1).describe('YouTube video ID or URL'),
+      segmentCount: z.number().int().min(2).max(8).optional(),
     },
     async ({ videoId, segmentCount }) => {
       try {
-        // 문자열 세그먼트 카운트를 숫자로 변환
-        const segmentCountNum = segmentCount ? parseInt(segmentCount, 10) : 4;
-
-        // Get video details and segmented transcript
-        const videoData = await youtubeService.getVideoDetails(videoId);
-        const video = videoData.items?.[0];
-        const segmentedTranscript = await youtubeService.getSegmentedTranscript(videoId, segmentCountNum);
+        const resolvedVideoId = extractVideoId(videoId);
+        const segmentedTranscript = await youtubeService.getSegmentedTranscript(resolvedVideoId, segmentCount ?? 4);
 
         if (!segmentedTranscript.text) {
           throw new Error('Failed to generate segmented transcript');
@@ -816,9 +938,7 @@ export default function ({ config }: { config: z.infer<typeof configSchema> }) {
               type: 'text',
               text: `Please provide a segment-by-segment analysis of the following YouTube video:
 
-Video Title: ${video?.snippet?.title || 'Unknown'}
-Channel: ${video?.snippet?.channelTitle || 'Unknown'}
-Published: ${video?.snippet?.publishedAt || 'Unknown'}
+Video: https://www.youtube.com/watch?v=${resolvedVideoId}
 
 ${segmentedTranscript.text}
 
@@ -867,21 +987,16 @@ Conclude with a brief overall summary that ties together the main themes across 
     'transcript-summary',
     'Generate a summary of a YouTube video based on its transcript content with customizable options. This prompt provides different summary levels from brief overviews to detailed analyses, and can extract key topics from the content. Optimal for quickly understanding video content without watching the entire video. Parameters: videoId (required) - The YouTube video ID; language (optional) - Language code for transcript (e.g., "en", "ko"); summaryLength (optional) - Level of detail in summary ("short", "medium", or "detailed", default: "medium"); includeKeywords (optional) - Whether to extract key topics (set to "true" to enable).',
     {
-      videoId: z.string().min(1),
+      videoId: z.string().min(1).describe('YouTube video ID or URL'),
       language: z.string().optional(),
-      summaryLength: z.string().optional(),
-      includeKeywords: z.string().optional(),
+      summaryLength: z.enum(['short', 'medium', 'detailed']).optional(),
+      includeKeywords: z.boolean().optional(),
     },
     async ({ videoId, language, summaryLength, includeKeywords }) => {
       try {
-        // Set defaults
         const finalSummaryLength = summaryLength || 'medium';
-        const shouldIncludeKeywords = includeKeywords === 'true';
-
-        // Get video details and transcript
-        const videoData = await youtubeService.getVideoDetails(videoId);
-        const video = videoData.items?.[0];
-        const transcriptData = await youtubeService.getTranscript(videoId, language);
+        const resolvedVideoId = extractVideoId(videoId);
+        const transcriptData = await youtubeService.getTranscript(resolvedVideoId, language);
 
         // Format transcript text
         const transcriptText = transcriptData.map(caption => caption.text).join(' ');
@@ -910,7 +1025,7 @@ Conclude with a brief overall summary that ties together the main themes across 
         }
 
         // Add keywords extraction if requested
-        if (shouldIncludeKeywords) {
+        if (includeKeywords) {
           summaryInstructions += `\n\nAlso extract and list 5-10 key topics, themes, or keywords from the content in the format:
 KEY TOPICS: [comma-separated list of key topics/keywords]`;
         }
@@ -922,9 +1037,7 @@ KEY TOPICS: [comma-separated list of key topics/keywords]`;
               type: 'text',
               text: `Please provide a ${finalSummaryLength} summary of the following YouTube video transcript.
 
-Video Title: ${video?.snippet?.title || 'Unknown'}
-Channel: ${video?.snippet?.channelTitle || 'Unknown'}
-Published: ${video?.snippet?.publishedAt || 'Unknown'}
+Source: https://www.youtube.com/watch?v=${resolvedVideoId}
 
 Transcript:
 ${transcriptText}

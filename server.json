@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.coyasong/youtube-research",
+  "title": "YouTube Research MCP",
+  "description": "Citation-ready YouTube transcript research and optional channel intelligence for AI agents.",
+  "repository": {
+    "url": "https://github.com/coyaSONG/youtube-mcp-server",
+    "source": "github"
+  },
+  "version": "1.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@coyasong/youtube-mcp-server",
+      "version": "1.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Optional YouTube Data API v3 key for search, comments, metadata, and statistics.",
+          "isRequired": false,
+          "isSecret": true,
+          "name": "YOUTUBE_API_KEY"
+        }
+      ]
+    }
+  ]
+}

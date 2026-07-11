@@ -4,6 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
+    "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
     "sourceMap": true,
@@ -12,4 +13,4 @@
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
-} 
+}
