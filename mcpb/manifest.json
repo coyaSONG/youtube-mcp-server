@@ -1,0 +1,67 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "youtube-research",
+  "display_name": "YouTube Research MCP",
+  "version": "1.1.1",
+  "description": "Citation-ready YouTube research for AI agents with timestamp-linked transcript evidence.",
+  "long_description": "Research YouTube videos without downloading entire transcripts into your agent context. Search captions, return exact timestamp links, compare evidence across videos, extract key moments, and optionally analyze comments, channels, trends, and statistics with a YouTube Data API key.",
+  "author": {
+    "name": "coyaSONG",
+    "url": "https://github.com/coyaSONG"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/coyaSONG/youtube-mcp-server"
+  },
+  "homepage": "https://github.com/coyaSONG/youtube-mcp-server",
+  "documentation": "https://github.com/coyaSONG/youtube-mcp-server#readme",
+  "support": "https://github.com/coyaSONG/youtube-mcp-server/issues",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/stdio-server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/stdio-server.js"
+      ],
+      "env": {
+        "YOUTUBE_API_KEY": "${user_config.youtube_api_key}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "keywords": [
+    "youtube",
+    "transcript",
+    "research",
+    "citations",
+    "timestamps",
+    "ai-agents",
+    "mcp"
+  ],
+  "license": "MIT",
+  "privacy_policies": [
+    "https://policies.google.com/privacy"
+  ],
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=20"
+    }
+  },
+  "user_config": {
+    "youtube_api_key": {
+      "type": "string",
+      "title": "YouTube Data API key (optional)",
+      "description": "Enables video search, comments, statistics, trends, categories, and channel intelligence. Transcript research works without it.",
+      "required": false,
+      "sensitive": true
+    }
+  }
+}
