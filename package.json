@@ -66,7 +66,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.6.1",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "googleapis": "^173.0.0",
     "node-cache": "^5.1.2",
