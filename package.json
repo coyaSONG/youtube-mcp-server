@@ -1,6 +1,6 @@
 {
   "name": "@coyasong/youtube-mcp-server",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -15,7 +15,7 @@
     "youtube-mcp-server": "dist/stdio-server.js",
     "youtube-mcp-http": "dist/http-server.js"
   },
-  "mcpName": "io.github.coyasong/youtube-research",
+  "mcpName": "io.github.coyaSONG/youtube-research",
   "scripts": {
     "clean": "rm -rf dist",
     "prebuild": "rm -rf dist && mkdir -p dist",
