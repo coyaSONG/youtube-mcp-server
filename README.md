@@ -52,6 +52,14 @@ The shortest local install uses stdio and needs no API key:
 codex mcp add youtube-research -- npx -y @coyasong/youtube-mcp-server@latest
 ```
 
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=youtube-research&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40coyasong%2Fyoutube-mcp-server%40latest%22%5D%7D)
+
+Or install from the VS Code command line:
+
+```bash
+code --add-mcp '{"name":"youtube-research","command":"npx","args":["-y","@coyasong/youtube-mcp-server@latest"]}'
+```
+
 For Claude Desktop, Cursor, and other stdio clients, use command `npx` with arguments `-y @coyasong/youtube-mcp-server@latest`.
 
 To run the Streamable HTTP transport instead:

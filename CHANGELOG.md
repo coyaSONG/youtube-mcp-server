@@ -12,6 +12,7 @@ All notable changes to this project are documented here. This project follows [S
 - Optional bearer authentication, CORS restriction, and bounded idle MCP sessions.
 - Health capability reporting, transport tests, CI, and a production container health check.
 - Reproducible live smoke benchmark comparing focused research with a full transcript response.
+- One-click and command-line installation paths for VS Code.
 
 ### Changed
 
