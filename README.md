@@ -1,7 +1,7 @@
 # YouTube Research MCP
 
 [![CI](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml)
-[![smithery badge](https://smithery.ai/badge/@coyaSONG/youtube-mcp-server)](https://smithery.ai/server/@coyaSONG/youtube-mcp-server)
+[![Smithery](https://smithery.ai/badge/coyaSONG/youtube-mcp-server)](https://smithery.ai/servers/coyaSONG/youtube-mcp-server)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Turn YouTube videos into citation-ready research for Codex, Claude, Cursor, and other MCP clients. Paste a video URL and get transcript evidence with timestamps and links that open at the exact quoted moment.
