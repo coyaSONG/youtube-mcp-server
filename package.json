@@ -12,8 +12,8 @@
   "sideEffects": false,
   "type": "module",
   "bin": {
-    "youtube-mcp-server": "./dist/stdio-server.js",
-    "youtube-mcp-http": "./dist/http-server.js"
+    "youtube-mcp-server": "dist/stdio-server.js",
+    "youtube-mcp-http": "dist/http-server.js"
   },
   "mcpName": "io.github.coyasong/youtube-research",
   "scripts": {
