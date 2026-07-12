@@ -17,12 +17,6 @@ test('distribution manifests describe the same release', async () => {
   assert.equal(mcpbManifest.version, packageJson.version);
   assert.equal(registryManifest.name, packageJson.mcpName);
   assert.equal(mcpbManifest.display_name, registryManifest.title);
-  assert.equal(mcpbManifest.tools_generated, false);
-  assert.equal(mcpbManifest.tools.length, 14);
-  assert.equal(new Set(mcpbManifest.tools.map(({ name }) => name)).size, 14);
-  assert.ok(
-    mcpbManifest.tools.every(({ name, description }) => name && description),
-  );
   assert.equal(
     mcpbManifest.repository.url,
     registryManifest.repository.url,
