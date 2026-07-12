@@ -1,6 +1,9 @@
 # YouTube Research MCP
 
 [![CI](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/%40coyasong%2Fyoutube-mcp-server?logo=npm)](https://www.npmjs.com/package/@coyasong/youtube-mcp-server)
+[![npm downloads](https://img.shields.io/npm/dm/%40coyasong%2Fyoutube-mcp-server?logo=npm)](https://www.npmjs.com/package/@coyasong/youtube-mcp-server)
+[![GitHub stars](https://img.shields.io/github/stars/coyaSONG/youtube-mcp-server?style=flat&logo=github)](https://github.com/coyaSONG/youtube-mcp-server/stargazers)
 [![Smithery](https://smithery.ai/badge/coyaSONG/youtube-mcp-server)](https://smithery.ai/servers/coyaSONG/youtube-mcp-server)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -32,8 +35,8 @@ The included live smoke test asks a focused question about a public video and co
 | Response | Characters returned |
 |---|---:|
 | Full transcript | 85,518 |
-| `research-video` (3 citations) | 970 |
-| Reduction | **98.9%** |
+| `research-video` (3 citations with source identity) | 1,550 |
+| Reduction | **98.2%** |
 
 This measures response characters, not model-specific tokens. Reproduce it against the default public fixture—or substitute your own video and query:
 
@@ -177,6 +180,10 @@ It returns structured JSON containing the video title and channel identity, cano
 }
 ```
 
+See [YouTube Research Recipes](docs/recipes.md) for copy-paste workflows for
+fact-checking claims, comparing interviews, navigating long talks, researching
+multilingual captions, and building citation-ready notes.
+
 ## Capability modes
 
 | Capability | No-key mode | With `YOUTUBE_API_KEY` |
@@ -186,6 +193,10 @@ It returns structured JSON containing the video title and channel identity, cano
 | Video/channel metadata, statistics, trends, and comparisons | No | Yes |
 
 Captions must be available for the requested video. Age-restricted, private, region-restricted, or caption-disabled videos may not return a transcript.
+
+If this project saves you research time, consider
+[starring the repository](https://github.com/coyaSONG/youtube-mcp-server) so
+other agent builders can discover it.
 
 ## Docker
 
