@@ -29,3 +29,15 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm audit --audit-level=high
+
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mcpb

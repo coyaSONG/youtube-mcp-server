@@ -52,6 +52,12 @@ The shortest local install uses stdio and needs no API key:
 codex mcp add youtube-research -- npx -y @coyasong/youtube-mcp-server@latest
 ```
 
+For Claude Desktop and other MCPB-compatible desktop clients, download the
+[latest one-click MCP bundle](https://github.com/coyaSONG/youtube-mcp-server/releases/latest/download/youtube-research-mcp.mcpb)
+and open it. The bundle vendors its runtime dependencies, starts locally over
+stdio, and asks for a YouTube API key only if you want the optional analytics
+tools.
+
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=youtube-research&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40coyasong%2Fyoutube-mcp-server%40latest%22%5D%7D)
 
 Or install from the VS Code command line:
@@ -198,6 +204,7 @@ npm run dev             # HTTP server from TypeScript
 npm test                # build and run all tests
 npm run test:live       # live public-video transcript and citation smoke test
 npm run test:user       # clean-room smoke test against the published npm package
+npm run test:mcpb       # build, unpack, and exercise the installable MCP bundle
 ```
 
 ## API Reference

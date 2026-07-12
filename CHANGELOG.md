@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Reproducible MCPB packaging with a clean-room bundle smoke test.
+- One-click GitHub release bundle for Claude Desktop and other MCPB clients.
+
 ## [1.1.1] - 2026-07-11
 
 ### Fixed

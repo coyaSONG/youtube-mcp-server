@@ -21,6 +21,9 @@
     "prebuild": "rm -rf dist && mkdir -p dist",
     "build": "npm run build:tsc",
     "build:tsc": "tsc",
+    "prepare:mcpb": "npm run build && node scripts/prepare-mcpb.mjs",
+    "build:mcpb": "npm run prepare:mcpb && mcpb pack .mcpb-stage artifacts/youtube-research-mcp.mcpb",
+    "test:mcpb": "npm run build:mcpb && node scripts/mcpb-smoke.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm test",
     "test": "npm run build && node --test tests/*.test.mjs",
@@ -74,10 +77,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",
     "@types/node": "^26.1.1",
     "ts-node": "^10.9.2",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "tmp": "0.2.7"
   }
 }
