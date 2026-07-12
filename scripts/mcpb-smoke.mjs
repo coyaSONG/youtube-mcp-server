@@ -48,6 +48,11 @@ try {
 
   const { tools } = await client.listTools();
   assert.equal(tools.length, 14);
+  assert.deepEqual(
+    tools.map(({ name }) => name).sort(),
+    manifest.tools.map(({ name }) => name).sort(),
+    'MCPB capability metadata must match the bundled server',
+  );
   assert.ok(tools.some(({ name }) => name === 'research-video'));
   assert.ok(tools.some(({ name }) => name === 'research-videos'));
 
