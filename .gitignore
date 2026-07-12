@@ -63,3 +63,5 @@ Desktop.ini
 # MCP specific
 mcp-logs/
 .smithery/
+/.mcpb-stage/
+/artifacts/
