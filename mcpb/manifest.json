@@ -30,65 +30,7 @@
       }
     }
   },
-  "tools": [
-    {
-      "name": "research-video",
-      "description": "Find citation-ready transcript evidence with exact timestamp links; no API key required."
-    },
-    {
-      "name": "research-videos",
-      "description": "Compare timestamp-linked evidence across two to five videos; no API key required."
-    },
-    {
-      "name": "get-video-transcript",
-      "description": "Retrieve a full timestamped transcript in an optional caption language."
-    },
-    {
-      "name": "enhanced-transcript",
-      "description": "Filter, search, segment, and format transcripts from up to five videos."
-    },
-    {
-      "name": "get-key-moments",
-      "description": "Extract concise timestamp-linked moments from a video transcript."
-    },
-    {
-      "name": "get-segmented-transcript",
-      "description": "Split a transcript into time-based sections for structured analysis."
-    },
-    {
-      "name": "search-videos",
-      "description": "Search YouTube with advanced filters; requires a YouTube Data API key."
-    },
-    {
-      "name": "get-video-comments",
-      "description": "Retrieve video comments and optional replies; requires a YouTube Data API key."
-    },
-    {
-      "name": "get-video-stats",
-      "description": "Retrieve video metadata and engagement statistics; requires a YouTube Data API key."
-    },
-    {
-      "name": "get-channel-stats",
-      "description": "Retrieve channel audience and publishing statistics; requires a YouTube Data API key."
-    },
-    {
-      "name": "compare-videos",
-      "description": "Compare engagement statistics across videos; requires a YouTube Data API key."
-    },
-    {
-      "name": "get-trending-videos",
-      "description": "Discover trending videos by region and category; requires a YouTube Data API key."
-    },
-    {
-      "name": "get-video-categories",
-      "description": "List YouTube video categories for a region; requires a YouTube Data API key."
-    },
-    {
-      "name": "analyze-channel-videos",
-      "description": "Analyze recent channel performance trends; requires a YouTube Data API key."
-    }
-  ],
-  "tools_generated": false,
+  "tools_generated": true,
   "prompts_generated": true,
   "keywords": [
     "youtube",
