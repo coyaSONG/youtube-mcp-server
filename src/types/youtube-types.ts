@@ -5,6 +5,22 @@ export interface TranscriptSegment {
   videoId?: string; // Added for multi-video transcripts
 }
 
+export interface ResearchSourceMetadata {
+  videoId: string;
+  title: string;
+  videoUrl: string;
+  channelId: string | null;
+  channelName: string | null;
+  channelUrl: string | null;
+  thumbnailUrl: string | null;
+}
+
+export interface ResearchTranscript {
+  fullTranscript: TranscriptSegment[];
+  transcript: TranscriptSegment[];
+  source: ResearchSourceMetadata;
+}
+
 export interface TimeRange {
   start?: number; // Start time in seconds
   end?: number; // End time in seconds

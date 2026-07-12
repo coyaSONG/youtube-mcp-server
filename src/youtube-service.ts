@@ -1,12 +1,65 @@
 import { google, youtube_v3 } from 'googleapis';
 import NodeCache from 'node-cache';
 import { Innertube } from 'youtubei.js';
-import { TranscriptSegment, TranscriptOptions, FormattedTranscript, TranscriptError, TimeRange, SearchOptions } from './types/youtube-types.js';
+import {
+  TranscriptSegment,
+  TranscriptOptions,
+  FormattedTranscript,
+  TranscriptError,
+  TimeRange,
+  SearchOptions,
+  ResearchSourceMetadata,
+  ResearchTranscript,
+} from './types/youtube-types.js';
 import { Json3CaptionResponse, parseJson3Transcript } from './transcript-parser.js';
 import { segmentTranscript } from './transcript-processing.js';
 
 const TRANSCRIPT_CACHE_TTL = 3600; // Cache transcripts for 1 hour
 const TRANSCRIPT_CACHE_MAX_KEYS = 500;
+
+interface BasicVideoInfo {
+  title?: string;
+  channel_id?: string;
+  author?: string;
+  channel?: {
+    id: string;
+    name: string;
+    url: string;
+  } | null;
+  thumbnail?: Array<{ url: string }>;
+}
+
+interface TranscriptSource {
+  segments: TranscriptSegment[];
+  metadata: ResearchSourceMetadata;
+}
+
+function normalizeYouTubeUrl(url: string | undefined): string | null {
+  if (!url) {
+    return null;
+  }
+  return new URL(url, 'https://www.youtube.com').toString();
+}
+
+export function createResearchSourceMetadata(
+  videoId: string,
+  basicInfo: BasicVideoInfo,
+): ResearchSourceMetadata {
+  const channelId = basicInfo.channel?.id ?? basicInfo.channel_id ?? null;
+  const thumbnails = basicInfo.thumbnail ?? [];
+  return {
+    videoId,
+    title: basicInfo.title ?? videoId,
+    videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    channelId,
+    channelName: basicInfo.channel?.name ?? basicInfo.author ?? null,
+    channelUrl: normalizeYouTubeUrl(
+      basicInfo.channel?.url
+        ?? (channelId ? `/channel/${channelId}` : undefined),
+    ),
+    thumbnailUrl: thumbnails[thumbnails.length - 1]?.url ?? null,
+  };
+}
 
 export class YouTubeService {
   private static readonly transcriptCache = new NodeCache({
@@ -44,7 +97,10 @@ export class YouTubeService {
     return YouTubeService.innertubePromise;
   }
 
-  private async fetchTranscript(videoId: string, language?: string): Promise<TranscriptSegment[]> {
+  private async fetchTranscriptSource(
+    videoId: string,
+    language?: string,
+  ): Promise<TranscriptSource> {
     const innertube = await this.getInnertube();
     const videoInfo = await innertube.getBasicInfo(videoId, { client: 'ANDROID_VR' });
     const tracks = videoInfo.captions?.caption_tracks ?? [];
@@ -88,7 +144,10 @@ export class YouTubeService {
       throw new Error('YouTube returned an empty caption track.');
     }
 
-    return segments;
+    return {
+      segments,
+      metadata: createResearchSourceMetadata(videoId, videoInfo.basic_info),
+    };
   }
 
   async searchVideos(
@@ -204,29 +263,20 @@ export class YouTubeService {
       ? { language: langOrOptions }
       : langOrOptions || {};
 
-    const cacheKey = this.generateTranscriptCacheKey(videoId, options);
-    const cachedTranscript = YouTubeService.transcriptCache.get<TranscriptSegment[]>(cacheKey);
+    const source = await this.loadTranscriptSource(videoId, options);
+    return this.processTranscript(source.segments, options);
+  }
 
-    if (cachedTranscript) {
-      return this.processTranscript(cachedTranscript, options);
-    }
-
-    try {
-      const captions = await this.fetchTranscript(videoId, options.language);
-      YouTubeService.transcriptCache.set(cacheKey, captions);
-
-      return this.processTranscript(captions, options);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`Error getting video transcript for ${videoId}:`, error);
-
-      throw new TranscriptError({
-        message: `Failed to fetch transcript: ${errorMessage}`,
-        videoId,
-        options,
-        originalError: error instanceof Error ? error : new Error(errorMessage)
-      });
-    }
+  async getResearchTranscript(
+    videoId: string,
+    options: TranscriptOptions = {},
+  ): Promise<ResearchTranscript> {
+    const source = await this.loadTranscriptSource(videoId, options);
+    return {
+      fullTranscript: source.segments,
+      transcript: this.processTranscript(source.segments, options),
+      source: source.metadata,
+    };
   }
 
   async getEnhancedTranscript(
@@ -637,5 +687,31 @@ export class YouTubeService {
       language: options.language || 'default'
     });
     return `transcript_${videoId}_${optionsString}`;
+  }
+
+  private async loadTranscriptSource(
+    videoId: string,
+    options: TranscriptOptions,
+  ): Promise<TranscriptSource> {
+    const cacheKey = this.generateTranscriptCacheKey(videoId, options);
+    const cachedSource = YouTubeService.transcriptCache.get<TranscriptSource>(cacheKey);
+    if (cachedSource) {
+      return cachedSource;
+    }
+
+    try {
+      const source = await this.fetchTranscriptSource(videoId, options.language);
+      YouTubeService.transcriptCache.set(cacheKey, source);
+      return source;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Error getting video transcript for ${videoId}:`, error);
+      throw new TranscriptError({
+        message: `Failed to fetch transcript: ${errorMessage}`,
+        videoId,
+        options,
+        originalError: error instanceof Error ? error : new Error(errorMessage),
+      });
+    }
   }
 }

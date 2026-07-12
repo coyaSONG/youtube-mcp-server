@@ -160,7 +160,7 @@ codex mcp add youtube-research \
 - `offset`: result offset for pagination
 - `maxSegments`: response cap from 1 to 1,000 (default: 200)
 
-It returns structured JSON containing the canonical video URL, full caption-track duration and segment count, matching transcript segments, timestamps, directly navigable citation URLs, and pagination metadata. For long videos, use a `query` or time window first; follow `nextOffset` only when more evidence is needed.
+It returns structured JSON containing the video title and channel identity, canonical video URL, full caption-track duration and segment count, matching transcript segments, human-readable citation labels, timestamps, directly navigable citation URLs, and pagination metadata. For long videos, use a `query` or time window first; follow `nextOffset` only when more evidence is needed.
 
 ### Compare evidence across videos
 
