@@ -1,4 +1,4 @@
-name: Release MCPB
+name: Release
 
 on:
   release:
@@ -12,21 +12,88 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
-  bundle:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    environment: release
+    env:
+      SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
-          cache: npm
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
       - run: npm ci
-      - run: npm run test:mcpb
+      - name: Verify release version
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          release_version="${{ github.event.release.tag_name || inputs.tag }}"
+          release_version="${release_version#v}"
+          test "$package_version" = "$release_version"
+      - name: Test package and MCPB bundle
+        run: |
+          npm test
+          npm run test:mcpb
+      - name: Check npm release
+        id: npm-release
+        shell: bash
+        run: |
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish package to npm with OIDC
+        if: steps.npm-release.outputs.published != 'true'
+        run: npm publish --access public
+      - name: Check MCP Registry release
+        id: mcp-release
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          registry_url='https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.coyaSONG%2Fyoutube-research&limit=100'
+          if curl --fail --silent --show-error "$registry_url" \
+            | jq --exit-status --arg version "$package_version" \
+              'any(.servers[]?; .server.name == "io.github.coyaSONG/youtube-research" and .server.version == $version)' \
+              >/dev/null; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install MCP Registry publisher
+        if: steps.mcp-release.outputs.published != 'true'
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.7.9/mcp-publisher_linux_amd64.tar.gz \
+            --output /tmp/mcp-publisher.tar.gz
+          echo 'ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac  /tmp/mcp-publisher.tar.gz' \
+            | sha256sum --check
+          tar -xzf /tmp/mcp-publisher.tar.gz mcp-publisher
+      - name: Publish to the official MCP Registry with OIDC
+        if: steps.mcp-release.outputs.published != 'true'
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
       - name: Upload bundle to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: gh release upload "$RELEASE_TAG" artifacts/youtube-research-mcp.mcpb --clobber
+      - name: Publish bundle to Smithery
+        if: env.SMITHERY_API_KEY != ''
+        run: npx -y @smithery/cli@4.11.1 --json mcp publish artifacts/youtube-research-mcp.mcpb -n coyaSONG/youtube-mcp-server

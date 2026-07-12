@@ -218,6 +218,9 @@ npm run test:user       # clean-room smoke test against the published npm packag
 npm run test:mcpb       # build, unpack, and exercise the installable MCP bundle
 ```
 
+Maintainers can follow the [release guide](docs/releasing.md). Published GitHub
+releases run the complete npm, MCP Registry, MCPB, and Smithery delivery pipeline.
+
 ## API Reference
 
 ### Resources
