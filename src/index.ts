@@ -149,7 +149,7 @@ export default function createServer({ config }: { config: z.infer<typeof config
   // Create the MCP server
   const server = new McpServer({
     name: 'YouTube Research MCP',
-    version: '1.1.1'
+    version: '1.2.0'
   });
 
   // Define resources

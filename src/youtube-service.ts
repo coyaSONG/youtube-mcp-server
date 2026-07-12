@@ -131,7 +131,7 @@ export class YouTubeService {
     }
 
     const response = await fetch(captionUrl, {
-      headers: { 'user-agent': 'Mozilla/5.0 (compatible; YouTubeResearchMCP/1.1)' },
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; YouTubeResearchMCP/1.2)' },
     });
     if (!response.ok) {
       throw new Error(`Caption request failed with HTTP ${response.status}.`);

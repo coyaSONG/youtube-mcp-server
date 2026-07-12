@@ -97,7 +97,7 @@ function createServerForSession() {
 app.get('/', (_req, res) => {
   res.status(200).json({
     name: 'YouTube Research MCP',
-    version: '1.1.1',
+    version: '1.2.0',
     mcpEndpoint: '/mcp',
     healthEndpoint: '/health',
     documentation: 'https://github.com/coyaSONG/youtube-mcp-server',
