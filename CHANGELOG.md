@@ -4,12 +4,19 @@ All notable changes to this project are documented here. This project follows [S
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-12
+
 ### Added
 
 - Reproducible MCPB packaging with a clean-room bundle smoke test.
 - One-click GitHub release bundle for Claude Desktop and other MCPB clients.
 - Video title, channel identity, thumbnail, and human-readable labels in
   citation-ready research results without requiring an API key.
+
+### Changed
+
+- Cache transcript segments and source identity together so focused research
+  needs only one YouTube information request.
 
 ## [1.1.1] - 2026-07-11
 

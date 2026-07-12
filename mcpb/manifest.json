@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "youtube-research",
   "display_name": "YouTube Research MCP",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Citation-ready YouTube research for AI agents with timestamp-linked transcript evidence.",
   "long_description": "Research YouTube videos without downloading entire transcripts into your agent context. Search captions, return exact timestamp links, compare evidence across videos, extract key moments, and optionally analyze comments, channels, trends, and statistics with a YouTube Data API key.",
   "author": {
