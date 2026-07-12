@@ -29,6 +29,15 @@ const READ_ONLY_TOOL_ANNOTATIONS = {
 const researchOutputSchema = {
   videoId: z.string(),
   sourceUrl: z.string().url(),
+  source: z.object({
+    videoId: z.string(),
+    title: z.string(),
+    videoUrl: z.string().url(),
+    channelId: z.string().nullable(),
+    channelName: z.string().nullable(),
+    channelUrl: z.string().url().nullable(),
+    thumbnailUrl: z.string().url().nullable(),
+  }),
   language: z.string(),
   query: z.string().nullable(),
   matchMode: z.enum(['word', 'substring']).nullable(),
@@ -44,6 +53,7 @@ const researchOutputSchema = {
   nextOffset: z.number().int().min(0).nullable(),
   durationSeconds: z.number().min(0),
   citations: z.array(z.object({
+    label: z.string(),
     timestamp: z.string(),
     seconds: z.number().min(0),
     text: z.string(),
@@ -83,17 +93,17 @@ async function researchVideo(
   }
 
   const videoId = extractVideoId(video);
-  const fullTranscript = await youtubeService.getTranscript(videoId, { language });
   const hasFilters = query !== undefined || startSeconds !== undefined || endSeconds !== undefined;
-  const segments = hasFilters
-    ? await youtubeService.getTranscript(videoId, {
-        language,
-        timeRange: startSeconds !== undefined || endSeconds !== undefined
-          ? { start: startSeconds, end: endSeconds }
-          : undefined,
-        search: query ? { query, contextLines, matchMode } : undefined,
-      })
-    : fullTranscript;
+  const research = await youtubeService.getResearchTranscript(videoId, {
+    language,
+    timeRange: hasFilters && (startSeconds !== undefined || endSeconds !== undefined)
+      ? { start: startSeconds, end: endSeconds }
+      : undefined,
+    search: hasFilters && query
+      ? { query, contextLines, matchMode }
+      : undefined,
+  });
+  const { fullTranscript, transcript: segments, source } = research;
   const durationSeconds = fullTranscript.reduce(
     (maximum, segment) => Math.max(maximum, (segment.offset + segment.duration) / 1000),
     0,
@@ -102,6 +112,7 @@ async function researchVideo(
   const citations = selectedSegments.map((segment) => {
     const seconds = segment.offset / 1000;
     return {
+      label: `${source.title} [${formatTime(segment.offset)}]`,
       timestamp: formatTime(segment.offset),
       seconds,
       text: segment.text,
@@ -111,7 +122,8 @@ async function researchVideo(
 
   return {
     videoId,
-    sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    sourceUrl: source.videoUrl,
+    source,
     language: language ?? 'default',
     query: query ?? null,
     matchMode: query ? matchMode : null,

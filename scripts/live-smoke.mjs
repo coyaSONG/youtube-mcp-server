@@ -24,6 +24,9 @@ try {
   assert.ok(result.structuredContent.totalAvailableSegments > 0);
   assert.ok(result.structuredContent.returnedSegments > 0);
   assert.ok(result.structuredContent.returnedSegments <= 3);
+  assert.ok(result.structuredContent.source.title.length > 0);
+  assert.match(result.structuredContent.source.videoUrl, /youtube\.com\/watch\?v=/);
+  assert.match(result.structuredContent.citations[0].label, /\[\d{2}:\d{2}\]$/);
   assert.match(result.structuredContent.citations[0].sourceUrl, /[?&]t=\d+s$/);
 
   const fullTranscript = await client.callTool({
@@ -62,6 +65,8 @@ try {
   console.log(JSON.stringify({
     status: 'ok',
     videoId: result.structuredContent.videoId,
+    title: result.structuredContent.source.title,
+    channel: result.structuredContent.source.channelName,
     matches: result.structuredContent.totalAvailableSegments,
     returned: result.structuredContent.returnedSegments,
     firstCitation: result.structuredContent.citations[0].sourceUrl,

@@ -48,7 +48,10 @@ try {
 
   const { tools } = await client.listTools();
   assert.equal(tools.length, 14);
-  assert.ok(tools.some(({ name }) => name === 'research-video'));
+  const researchTool = tools.find(({ name }) => name === 'research-video');
+  assert.ok(researchTool);
+  assert.ok(researchTool.outputSchema.properties.source);
+  assert.ok(researchTool.outputSchema.properties.citations.items.properties.label);
   assert.ok(tools.some(({ name }) => name === 'research-videos'));
 
   const invalidInput = await client.callTool({

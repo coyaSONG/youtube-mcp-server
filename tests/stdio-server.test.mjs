@@ -17,6 +17,8 @@ test('stdio entry point serves the flagship research tool', async () => {
     const researchTool = tools.find((tool) => tool.name === 'research-video');
     assert.ok(researchTool);
     assert.equal(researchTool.annotations.readOnlyHint, true);
+    assert.ok(researchTool.outputSchema.properties.source);
+    assert.ok(researchTool.outputSchema.properties.citations.items.properties.label);
   } finally {
     await client.close();
   }

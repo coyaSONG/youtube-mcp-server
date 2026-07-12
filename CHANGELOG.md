@@ -8,6 +8,8 @@ All notable changes to this project are documented here. This project follows [S
 
 - Reproducible MCPB packaging with a clean-room bundle smoke test.
 - One-click GitHub release bundle for Claude Desktop and other MCPB clients.
+- Video title, channel identity, thumbnail, and human-readable labels in
+  citation-ready research results without requiring an API key.
 
 ## [1.1.1] - 2026-07-11
 
