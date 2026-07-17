@@ -28,6 +28,20 @@ No YouTube API key is required for transcript research.
 - **Full YouTube intelligence** — optional API mode adds comments, video/channel statistics, trends, and comparisons.
 - **Remote-native MCP** — Streamable HTTP transport at `/mcp`, plus Docker and Smithery support.
 
+## Architecture and trust boundary
+
+```mermaid
+flowchart LR
+    C[MCP client] -->|stdio or Streamable HTTP| T[Transport]
+    T --> R[Tool and resource registry]
+    R --> S[YouTubeService]
+    S --> K[(In-memory cache)]
+    S -->|no key required| YT[Caption tracks]
+    S -->|optional API key| API[YouTube Data API v3]
+```
+
+The MCP layer validates inputs and returns structured evidence; it does not ask a model to invent summaries or citations. Transcript tools derive timestamps and canonical links from caption segments. Data API tools return an explicit key-required error when `YOUTUBE_API_KEY` is unavailable, and remote authentication is enforced before MCP session handling.
+
 ## Focused evidence, not a transcript dump
 
 The included live smoke test asks a focused question about a public video and compares the response with the full timestamped transcript:
@@ -197,6 +211,9 @@ Captions must be available for the requested video. Age-restricted, private, reg
 If this project saves you research time, consider
 [starring the repository](https://github.com/coyaSONG/youtube-mcp-server) so
 other agent builders can discover it.
+
+See the broader [AI tooling portfolio](https://coyasong.dev/portfolio) for the
+reliability principles shared with `ralph-research` and `tmuxicate`.
 
 ## Docker
 
