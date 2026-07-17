@@ -23,9 +23,43 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 const youtubeApiKey = process.env.YOUTUBE_API_KEY;
 const bearerToken = process.env.MCP_BEARER_TOKEN;
-const corsOrigin = process.env.CORS_ORIGIN ?? '*';
 const maxSessions = Number(process.env.MAX_SESSIONS ?? '100');
 const sessionIdleTimeoutMs = Number(process.env.SESSION_IDLE_TIMEOUT_MS ?? '1800000');
+
+function parseCorsOrigins(value: string | undefined): Set<string> {
+  if (!value) {
+    return new Set();
+  }
+
+  const origins = value.split(',').map((origin) => origin.trim()).filter(Boolean);
+  return new Set(origins.map((origin) => {
+    if (origin === '*') {
+      throw new Error('CORS_ORIGIN must list explicit origins; wildcard access is not supported.');
+    }
+
+    const parsed = new URL(origin);
+    if (
+      (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
+      || parsed.username
+      || parsed.password
+      || parsed.pathname !== '/'
+      || parsed.search
+      || parsed.hash
+    ) {
+      throw new Error(`Invalid CORS origin: ${origin}`);
+    }
+
+    return parsed.origin;
+  }));
+}
+
+let allowedCorsOrigins: Set<string>;
+try {
+  allowedCorsOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : 'Invalid CORS_ORIGIN configuration.');
+  process.exit(1);
+}
 
 if (!Number.isInteger(maxSessions) || maxSessions < 1) {
   console.error('MAX_SESSIONS must be a positive integer.');
@@ -43,7 +77,9 @@ const sessions = new Map<string, SessionContext>();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '4mb' }));
 app.use(cors({
-  origin: corsOrigin,
+  origin(origin, callback) {
+    callback(null, !origin || allowedCorsOrigins.has(origin));
+  },
   exposedHeaders: ['Mcp-Session-Id']
 }));
 

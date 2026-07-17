@@ -153,6 +153,9 @@ export SESSION_IDLE_TIMEOUT_MS=1800000
 npm start
 ```
 
+Browser origins are denied by default. `CORS_ORIGIN` accepts a comma-separated
+allowlist of exact `http://` or `https://` origins; wildcard origins are rejected.
+
 Connect Codex using an environment variable rather than writing the secret into its configuration:
 
 ```bash

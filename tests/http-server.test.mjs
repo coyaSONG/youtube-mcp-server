@@ -33,13 +33,15 @@ async function waitForHealth(baseUrl) {
 
 test('HTTP server exposes health and validates MCP sessions', async (t) => {
   const port = await reservePort();
+  const env = {
+    ...process.env,
+    PORT: String(port),
+    YOUTUBE_API_KEY: 'test-key',
+    MCP_BEARER_TOKEN: 'test-token',
+  };
+  delete env.CORS_ORIGIN;
   const child = spawn(process.execPath, ['dist/http-server.js'], {
-    env: {
-      ...process.env,
-      PORT: String(port),
-      YOUTUBE_API_KEY: 'test-key',
-      MCP_BEARER_TOKEN: 'test-token',
-    },
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -56,6 +58,11 @@ test('HTTP server exposes health and validates MCP sessions', async (t) => {
   assert.equal(rootResponse.status, 200);
   assert.equal(rootResponse.headers.get('x-powered-by'), null);
   assert.equal((await rootResponse.json()).mcpEndpoint, '/mcp');
+
+  const crossOriginResponse = await fetch(baseUrl, {
+    headers: { origin: 'https://untrusted.example' },
+  });
+  assert.equal(crossOriginResponse.headers.get('access-control-allow-origin'), null);
 
   assert.deepEqual(await healthResponse.json(), {
     status: 'ok',
@@ -108,6 +115,41 @@ test('HTTP server exposes health and validates MCP sessions', async (t) => {
     },
   });
   assert.equal(missingSessionResponse.status, 404);
+});
+
+test('HTTP server only emits CORS headers for configured exact origins', async (t) => {
+  const port = await reservePort();
+  const child = spawn(process.execPath, ['dist/http-server.js'], {
+    env: {
+      ...process.env,
+      PORT: String(port),
+      CORS_ORIGIN: 'https://client.example, http://localhost:5173',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  t.after(async () => {
+    if (child.exitCode === null) {
+      child.kill('SIGTERM');
+      await once(child, 'exit');
+    }
+  });
+
+  const baseUrl = `http://127.0.0.1:${port}`;
+  await waitForHealth(baseUrl);
+
+  const allowedResponse = await fetch(baseUrl, {
+    headers: { origin: 'https://client.example' },
+  });
+  assert.equal(
+    allowedResponse.headers.get('access-control-allow-origin'),
+    'https://client.example'
+  );
+
+  const deniedResponse = await fetch(baseUrl, {
+    headers: { origin: 'https://untrusted.example' },
+  });
+  assert.equal(deniedResponse.headers.get('access-control-allow-origin'), null);
 });
 
 test('HTTP server starts in transcript-only mode without an API key', async (t) => {
