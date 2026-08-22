@@ -1,3 +1,5 @@
+
+
 # YouTube Research MCP
 
 [![CI](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml)
@@ -139,7 +141,7 @@ export YOUTUBE_API_KEY=your_key_here
 npm start
 ```
 
-`YOUTUBE_API_KEY` is optional. `PORT` defaults to `3000`.
+`YOUTUBE_API_KEY` is optional. `PORT` defaults to `3000`. For stdio clients, set `YOUTUBE_API_KEY` in the MCP server environment configuration.
 
 ## Secure a remote deployment
 
