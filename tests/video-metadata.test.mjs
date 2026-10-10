@@ -25,6 +25,11 @@ test('research source metadata preserves citation identity', () => {
       channelName: 'Research Channel',
       channelUrl: 'https://www.youtube.com/@research-channel',
       thumbnailUrl: 'https://i.ytimg.com/vi/abcdefghijk/maxresdefault.jpg',
+      captionRequestedLanguage: null,
+      captionTrackLanguage: null,
+      captionLanguage: null,
+      captionOrigin: null,
+      captionSourceOrigin: null,
     },
   );
 });
@@ -38,5 +43,26 @@ test('research source metadata degrades safely when optional fields are absent',
     channelName: null,
     channelUrl: null,
     thumbnailUrl: null,
+    captionRequestedLanguage: null,
+    captionTrackLanguage: null,
+    captionLanguage: null,
+    captionOrigin: null,
+    captionSourceOrigin: null,
   });
+});
+
+test('research source metadata preserves selected caption provenance', () => {
+  const metadata = createResearchSourceMetadata('abcdefghijk', {}, {
+    requestedLanguage: 'nl',
+    trackLanguage: 'en',
+    outputLanguage: 'nl',
+    origin: 'translated',
+    sourceOrigin: 'youtube_asr',
+  });
+
+  assert.equal(metadata.captionRequestedLanguage, 'nl');
+  assert.equal(metadata.captionTrackLanguage, 'en');
+  assert.equal(metadata.captionLanguage, 'nl');
+  assert.equal(metadata.captionOrigin, 'translated');
+  assert.equal(metadata.captionSourceOrigin, 'youtube_asr');
 });
