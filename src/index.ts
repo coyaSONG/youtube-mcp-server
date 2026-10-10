@@ -314,17 +314,7 @@ export default function createServer({ config }: { config: z.infer<typeof config
   // Define tools
   server.tool(
     'search-videos',
-    '[Requires YOUTUBE_API_KEY] Search for YouTube videos with advanced filtering options. Supports parameters: \
-- query: Search term (required) \
-- maxResults: Number of results to return (1-50) \
-- channelId: Filter by specific channel \
-- order: Sort by date, rating, viewCount, relevance, title \
-- type: Filter by resource type (video, channel, playlist) \
-- videoDuration: Filter by length (short: <4min, medium: 4-20min, long: >20min) \
-- publishedAfter/publishedBefore: Filter by publish date (ISO format) \
-- videoCaption: Filter by caption availability \
-- videoDefinition: Filter by quality (standard/high) \
-- regionCode: Filter by country (ISO country code)',
+    '[Requires YOUTUBE_API_KEY] Search YouTube through the Data API with source-native filters and explicit pageToken continuation. Supports query, result bounds, channel, ordering, resource type, duration, publication window, caption availability, definition and region filters.',
     {
       query: z.string().min(1),
       maxResults: z.number().min(1).max(50).optional(),
@@ -336,10 +326,11 @@ export default function createServer({ config }: { config: z.infer<typeof config
       publishedBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/).optional(),
       videoCaption: z.enum(['any', 'closedCaption', 'none']).optional(),
       videoDefinition: z.enum(['any', 'high', 'standard']).optional(),
-      regionCode: z.string().length(2).optional()
+      regionCode: z.string().length(2).optional(),
+      pageToken: z.string().min(1).optional()
     },
     READ_ONLY_TOOL_ANNOTATIONS,
-    async ({ query, maxResults = 10, channelId, order, type, videoDuration, publishedAfter, publishedBefore, videoCaption, videoDefinition, regionCode }) => {
+    async ({ query, maxResults = 10, channelId, order, type, videoDuration, publishedAfter, publishedBefore, videoCaption, videoDefinition, regionCode, pageToken }) => {
       try {
         const searchResults = await youtubeService.searchVideos(query, maxResults, {
           channelId,
@@ -350,7 +341,8 @@ export default function createServer({ config }: { config: z.infer<typeof config
           publishedBefore,
           videoCaption,
           videoDefinition,
-          regionCode
+          regionCode,
+          pageToken
         });
 
         return {
@@ -373,20 +365,26 @@ export default function createServer({ config }: { config: z.infer<typeof config
 
   server.tool(
     'get-video-comments',
-    '[Requires YOUTUBE_API_KEY] Retrieve comments for a specific YouTube video with sorting options',
+    '[Requires YOUTUBE_API_KEY] Retrieve comment threads for a YouTube video with explicit pagination and plain-text evidence. Use includeReplies for the provider-embedded reply subset, completeReplies to follow comments.list until the requested threads are complete, optional maxRepliesPerThread for an explicit caller cap, searchTerms for source-native comment filtering, and pageToken for the next top-level thread page.',
     {
       videoId: z.string().min(1),
       maxResults: z.number().min(1).max(100).optional(),
       order: z.enum(['time', 'relevance']).optional(),
       includeReplies: z.boolean().optional(),
+      completeReplies: z.boolean().optional(),
+      maxRepliesPerThread: z.number().int().min(1).max(1000).optional(),
+      searchTerms: z.string().min(1).optional(),
       pageToken: z.string().optional()
     },
     READ_ONLY_TOOL_ANNOTATIONS,
-    async ({ videoId, maxResults = 20, order = 'relevance', includeReplies = false, pageToken }) => {
+    async ({ videoId, maxResults = 20, order = 'relevance', includeReplies = false, completeReplies = false, maxRepliesPerThread, searchTerms, pageToken }) => {
       try {
         const commentsData = await youtubeService.getComments(videoId, maxResults, {
           order,
           includeReplies,
+          completeReplies,
+          maxRepliesPerThread,
+          searchTerms,
           pageToken
         });
 
