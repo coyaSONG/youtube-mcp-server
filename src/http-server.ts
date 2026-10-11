@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import { config as loadEnvironment } from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import createServer, { configSchema } from './index.js';
+
+loadEnvironment({ quiet: true });
 
 interface SessionContext {
   server: ReturnType<typeof createServer>;

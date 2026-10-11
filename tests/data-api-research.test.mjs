@@ -156,7 +156,7 @@ test('YTR-021 completeReplies honors maxRepliesPerThread and marks truncation', 
 });
 
 
-test('YTR-021 completeReplies has no implicit reply cap', async () => {
+test('YTR-021 completeReplies enforces a default reply cap', async () => {
   const service = new YouTubeService('test-key');
   let replyPage = 0;
 
@@ -197,14 +197,14 @@ test('YTR-021 completeReplies has no implicit reply cap', async () => {
     completeReplies: true,
   });
 
-  assert.equal(replyPage, 6);
+  assert.equal(replyPage, 1);
   assert.deepEqual(result.items[0].replyCoverage, {
     available: 600,
-    returned: 600,
-    complete: true,
-    truncated: false,
+    returned: 100,
+    complete: false,
+    truncated: true,
   });
-  assert.equal(result.researchContext.maxRepliesPerThread, null);
+  assert.equal(result.researchContext.maxRepliesPerThread, 100);
 });
 
 
@@ -373,3 +373,140 @@ test('YTR-010 Data API methods fail explicitly without an API key', async () => 
     /API key/i,
   );
 });
+
+function stubComments(threads, fetchReplies) {
+  const service = new YouTubeService('test-key');
+  service.youtube = {
+    commentThreads: { list: async () => ({ data: { items: threads, nextPageToken: 'top-next' } }) },
+    comments: { list: fetchReplies },
+  };
+  return service;
+}
+
+function thread(id, total, embedded = []) {
+  return { snippet: { totalReplyCount: total, topLevelComment: comment(id) }, replies: { comments: embedded } };
+}
+
+test('reply budget is shared across threads and preserves top-level continuation', async () => {
+  let calls = 0;
+  const service = stubComments([thread('one', 1000), thread('two', 1000)], async (args) => {
+    calls += 1;
+    return { data: { items: Array.from({ length: args.maxResults }, (_, i) => comment(`${calls}-${i}`)), nextPageToken: calls < 10 ? `p${calls}` : undefined } };
+  });
+  const result = await service.getComments('video', 20, { completeReplies: true, maxRepliesPerThread: 1000 });
+  assert.equal(calls, 10);
+  assert.equal(result.items[0].replyCoverage.complete, true);
+  assert.deepEqual(result.items[1].replyCoverage, { available: 1000, returned: 0, complete: false, truncated: true });
+  assert.equal(result.nextPageToken, 'top-next');
+});
+
+test('reply request budget bounds low-yield pages across threads', async () => {
+  let calls = 0;
+  const service = stubComments([thread('one', 100), thread('two', 100)], async () => {
+    calls += 1;
+    return { data: { items: [comment(`reply-${calls}`)], nextPageToken: `p${calls}` } };
+  });
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.equal(calls, 20);
+  assert.equal(result.items[0].replyCoverage.returned, 20);
+  assert.ok(result.items.every((item) => item.replyCoverage.truncated && !item.replyCoverage.complete));
+});
+
+test('empty pages with changing tokens stop without claiming completion', async () => {
+  let calls = 0;
+  const service = stubComments([thread('one', 100)], async () => ({ data: { items: [], nextPageToken: `p${++calls}` } }));
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.equal(calls, 1);
+  assert.equal(result.items[0].replyCoverage.complete, false);
+  assert.equal(result.items[0].replyCoverage.truncated, true);
+});
+
+test('overlapping pages count unique reply IDs and retain later unique replies', async () => {
+  let calls = 0;
+  const service = stubComments([thread('one', 3)], async () => ({ data: ++calls === 1
+    ? { items: [comment('a'), comment('b')], nextPageToken: 'second' }
+    : { items: [comment('b'), comment('c')] } }));
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.deepEqual(result.items[0].replies.comments.map((reply) => reply.id), ['a', 'b', 'c']);
+  assert.equal(result.items[0].replyCoverage.complete, true);
+});
+
+test('duplicate-only pages cannot satisfy completeness or keep fetching', async () => {
+  let calls = 0;
+  const service = stubComments([thread('one', 2)], async () => ({ data: { items: [comment('same')], nextPageToken: `p${++calls}` } }));
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.equal(calls, 2);
+  assert.deepEqual(result.items[0].replyCoverage, { available: 2, returned: 1, complete: false, truncated: true });
+});
+
+test('repeated tokens stop even when each page contains new replies', async () => {
+  let calls = 0;
+  const service = stubComments([thread('one', 3)], async () => ({ data: { items: [comment(`r${++calls}`)], nextPageToken: 'same-token' } }));
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.equal(calls, 2);
+  assert.equal(result.items[0].replyCoverage.complete, false);
+});
+
+test('embedded duplicates do not prevent fetching the missing unique replies', async () => {
+  let calls = 0;
+  const service = stubComments([thread('one', 2, [comment('a'), comment('a')])], async () => {
+    calls += 1;
+    return { data: { items: [comment('a'), comment('b')] } };
+  });
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.equal(calls, 1);
+  assert.equal(result.items[0].replyCoverage.complete, true);
+});
+
+test('embedded replies share the aggregate budget even without full retrieval', async () => {
+  const embedded = Array.from({ length: 600 }, (_, i) => comment(`r${i}`));
+  const service = stubComments([thread('one', 600, embedded), thread('two', 600, embedded)], async () => assert.fail('no reply request expected'));
+  const result = await service.getComments('video', 20, { includeReplies: true });
+  assert.equal(result.items[0].replyCoverage.returned, 600);
+  assert.deepEqual(result.items[1].replyCoverage, { available: 600, returned: 400, complete: false, truncated: true });
+});
+
+test('reply byte budget never silently cuts comment text', async () => {
+  const hugeReply = comment('huge'); hugeReply.snippet.textDisplay = 'x'.repeat(1024 * 1024);
+  const service = stubComments([thread('one', 2)], async () => ({ data: { items: [comment('small'), hugeReply] } }));
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.deepEqual(result.items[0].replies.comments.map((reply) => reply.id), ['small']);
+  assert.equal(result.items[0].replyCoverage.truncated, true);
+  assert.equal(result.items[0].replyCoverage.complete, false);
+});
+
+test('missing IDs and prematurely ended pages cannot establish complete evidence', async () => {
+  const service = stubComments([thread('one', 2)], async () => ({ data: { items: [comment('a'), comment(undefined)] } }));
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.equal(result.items[0].replyCoverage.returned, 1);
+  assert.equal(result.items[0].replyCoverage.complete, false);
+});
+
+test('zero-reply threads need no extra API call', async () => {
+  const service = stubComments([thread('one', 0)], async () => assert.fail('no reply request expected'));
+  const result = await service.getComments('video', 20, { completeReplies: true });
+  assert.deepEqual(result.items[0].replyCoverage, { available: 0, returned: 0, complete: true, truncated: false });
+});
+
+test('service rejects non-finite, fractional and oversized bounds before API calls', async () => {
+  const service = new YouTubeService('test-key');
+  service.youtube = { commentThreads: { list: async () => assert.fail('invalid bounds must not reach API') } };
+  for (const cap of [NaN, Infinity, 0, -1, 1.5, 1001]) {
+    await assert.rejects(service.getComments('video', 20, { completeReplies: true, maxRepliesPerThread: cap }), /maxRepliesPerThread/);
+  }
+  await assert.rejects(service.getComments('video', 101), /maxResults/);
+});
+
+for (const missingCount of [undefined, null]) {
+  test(`unknown reply count (${missingCount}) never claims complete coverage`, async () => {
+    let calls = 0;
+    const service = stubComments([thread('one', missingCount)], async () => {
+      calls += 1;
+      return { data: { items: [comment('a')] } };
+    });
+    const result = await service.getComments('video', 20, { completeReplies: true });
+    assert.equal(calls, 1);
+    assert.equal(result.items[0].replyCoverage.returned, 1);
+    assert.equal(result.items[0].replyCoverage.complete, false);
+  });
+}

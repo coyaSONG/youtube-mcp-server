@@ -15,6 +15,13 @@ import {
 import { Json3CaptionResponse, parseJson3Transcript } from './transcript-parser.js';
 import { segmentTranscript } from './transcript-processing.js';
 
+const DEFAULT_REPLIES_PER_THREAD = 100;
+const MAX_REPLIES_PER_THREAD = 1000;
+const MAX_REPLIES_PER_CALL = 1000;
+const MAX_REPLY_REQUESTS = 20;
+const MAX_REPLY_BYTES = 1024 * 1024;
+const COMMENT_REQUEST_TIMEOUT_MS = 10_000;
+
 const TRANSCRIPT_CACHE_TTL = 3600; // Cache transcripts for 1 hour
 const TRANSCRIPT_CACHE_MAX_KEYS = 500;
 
@@ -263,7 +270,20 @@ export class YouTubeService {
         maxRepliesPerThread,
         searchTerms,
       } = options;
+      if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > 100) {
+        throw new Error('maxResults must be an integer between 1 and 100.');
+      }
+      if (maxRepliesPerThread !== undefined && (
+        !Number.isInteger(maxRepliesPerThread)
+        || maxRepliesPerThread < 1
+        || maxRepliesPerThread > MAX_REPLIES_PER_THREAD
+      )) {
+        throw new Error('maxRepliesPerThread must be an integer between 1 and 1000.');
+      }
       const withReplies = includeReplies || completeReplies;
+      const replyLimit = completeReplies
+        ? (maxRepliesPerThread ?? DEFAULT_REPLIES_PER_THREAD)
+        : MAX_REPLIES_PER_THREAD;
 
       const response = await this.youtube.commentThreads.list({
         part: withReplies ? ['snippet', 'replies'] : ['snippet'],
@@ -273,7 +293,7 @@ export class YouTubeService {
         pageToken,
         searchTerms,
         textFormat: 'plainText',
-      });
+      }, { timeout: COMMENT_REQUEST_TIMEOUT_MS, retry: false });
       const result = response.data as youtube_v3.Schema$CommentThreadListResponse & {
         researchContext?: {
           videoId: string;
@@ -296,69 +316,83 @@ export class YouTubeService {
         pageToken: pageToken ?? null,
         includeReplies: withReplies,
         completeReplies,
-        maxRepliesPerThread: completeReplies ? (maxRepliesPerThread ?? null) : null,
+        maxRepliesPerThread: completeReplies ? replyLimit : null,
       };
 
       if (!withReplies) {
         return result;
       }
 
+      // Budgets are shared by all threads, including provider-embedded replies.
+      let returnedReplies = 0;
+      let returnedReplyBytes = 0;
+      let replyRequests = 0;
       for (const thread of result.items ?? []) {
-        const totalReplies = Number(thread.snippet?.totalReplyCount ?? 0);
+        const rawTotalReplies = thread.snippet?.totalReplyCount;
+        const totalReplies = rawTotalReplies ?? -1;
+        const countIsValid = Number.isSafeInteger(totalReplies) && totalReplies >= 0;
         const embeddedReplies = thread.replies?.comments ?? [];
-        const topLevelCommentId = thread.snippet?.topLevelComment?.id ?? undefined;
-        const replyLimit = maxRepliesPerThread === undefined
-          ? totalReplies
-          : Math.max(1, Math.min(1000, maxRepliesPerThread));
-        let replies = completeReplies
-          ? embeddedReplies.slice(0, replyLimit)
-          : embeddedReplies;
+        const embeddedIds = new Set(embeddedReplies.map((reply) => reply.id).filter(Boolean));
+        const topLevelCommentId = thread.snippet?.topLevelComment?.id;
+        const replies: youtube_v3.Schema$Comment[] = [];
+        const seenReplyIds = new Set<string>();
         let providerHasMore = false;
+        let stopped = false;
+        let invalidReply = false;
 
-        if (
-          completeReplies
-          && embeddedReplies.length < totalReplies
-          && replies.length < replyLimit
-          && topLevelCommentId
-        ) {
-          replies = [];
-          let replyPageToken: string | undefined;
-          const seenPageTokens = new Set<string>();
-
-          do {
-            const remaining = replyLimit - replies.length;
-            if (remaining <= 0) {
-              providerHasMore = true;
+        const appendReplies = (items: youtube_v3.Schema$Comment[]) => {
+          for (const reply of items) {
+            if (!reply.id) {
+              invalidReply = true;
+              continue;
+            }
+            if (seenReplyIds.has(reply.id)) continue;
+            const bytes = Buffer.byteLength(JSON.stringify(reply), 'utf8');
+            if (replies.length >= replyLimit || returnedReplies >= MAX_REPLIES_PER_CALL
+              || returnedReplyBytes + bytes > MAX_REPLY_BYTES) {
+              stopped = true;
               break;
             }
+            seenReplyIds.add(reply.id);
+            replies.push(reply);
+            returnedReplies += 1;
+            returnedReplyBytes += bytes;
+          }
+        };
 
+        if (completeReplies && topLevelCommentId
+          && (!countIsValid || embeddedIds.size < totalReplies)) {
+          let replyPageToken: string | undefined;
+          const seenPageTokens = new Set<string>();
+          do {
+            const remaining = Math.min(replyLimit - replies.length, MAX_REPLIES_PER_CALL - returnedReplies);
+            if (remaining <= 0 || replyRequests >= MAX_REPLY_REQUESTS
+              || returnedReplyBytes >= MAX_REPLY_BYTES) {
+              stopped = true;
+              break;
+            }
+            replyRequests += 1;
             const replyResponse = await this.youtube.comments.list({
               part: ['snippet'],
               parentId: topLevelCommentId,
               maxResults: Math.min(100, remaining),
               pageToken: replyPageToken,
               textFormat: 'plainText',
-            });
-            replies.push(...(replyResponse.data.items ?? []).slice(0, remaining));
-
+            }, { timeout: COMMENT_REQUEST_TIMEOUT_MS, retry: false });
+            const previousLength = replies.length;
+            appendReplies(replyResponse.data.items ?? []);
             const nextPageToken = replyResponse.data.nextPageToken ?? undefined;
-            if (!nextPageToken) {
-              replyPageToken = undefined;
-              providerHasMore = false;
-              break;
-            }
-            if (seenPageTokens.has(nextPageToken)) {
-              providerHasMore = true;
+            providerHasMore = Boolean(nextPageToken);
+            if (stopped || !nextPageToken) break;
+            if (seenPageTokens.has(nextPageToken) || replies.length === previousLength) {
+              stopped = true;
               break;
             }
             seenPageTokens.add(nextPageToken);
             replyPageToken = nextPageToken;
-            providerHasMore = true;
-          } while (replies.length < replyLimit);
-        }
-
-        if (completeReplies && maxRepliesPerThread !== undefined && replies.length > replyLimit) {
-          replies = replies.slice(0, replyLimit);
+          } while (true);
+        } else {
+          appendReplies(embeddedReplies);
         }
 
         const threadWithCoverage = thread as youtube_v3.Schema$CommentThread & {
@@ -371,12 +405,11 @@ export class YouTubeService {
         };
         threadWithCoverage.replies = { comments: replies };
         threadWithCoverage.replyCoverage = {
-          available: totalReplies,
+          available: countIsValid ? totalReplies : 0,
           returned: replies.length,
-          complete: replies.length >= totalReplies && !providerHasMore,
-          truncated: maxRepliesPerThread !== undefined
-            && replies.length < totalReplies
-            && replies.length >= replyLimit,
+          complete: countIsValid && !invalidReply && !stopped
+            && replies.length >= totalReplies && !providerHasMore,
+          truncated: stopped,
         };
       }
 

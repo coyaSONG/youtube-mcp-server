@@ -370,10 +370,10 @@ export default function createServer({ config }: { config: z.infer<typeof config
 
   server.tool(
     'get-video-comments',
-    '[Requires YOUTUBE_API_KEY] Retrieve comment threads for a YouTube video with explicit pagination and plain-text evidence. Use includeReplies for the provider-embedded reply subset, completeReplies to follow comments.list until the requested threads are complete, optional maxRepliesPerThread for an explicit caller cap, searchTerms for source-native comment filtering, and pageToken for the next top-level thread page.',
+    '[Requires YOUTUBE_API_KEY] Retrieve comment threads for a YouTube video with explicit pagination and plain-text evidence. Use includeReplies for the provider-embedded reply subset, completeReplies for bounded comments.list pagination (100 replies/thread by default, maximum 1000). Each call allows at most 1000 replies, 20 reply requests and 1 MiB of reply JSON; inspect replyCoverage for incomplete or truncated results. Use maxRepliesPerThread for a per-thread cap, searchTerms for source-native comment filtering, and pageToken for the next top-level thread page.',
     {
       videoId: z.string().min(1),
-      maxResults: z.number().min(1).max(100).optional(),
+      maxResults: z.number().int().min(1).max(100).optional(),
       order: z.enum(['time', 'relevance']).optional(),
       includeReplies: z.boolean().optional(),
       completeReplies: z.boolean().optional(),

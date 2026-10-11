@@ -95,6 +95,7 @@ test('HTTP server exposes health and validates MCP sessions', async (t) => {
   assert.equal(researchTool.annotations.readOnlyHint, true);
   assert.equal(researchTool.annotations.destructiveHint, false);
   assert.equal(researchTool.outputSchema.type, 'object');
+  await mcpTransport.terminateSession();
   await mcpClient.close();
 
   assert.equal(child.exitCode, null);
@@ -110,6 +111,7 @@ test('HTTP server exposes health and validates MCP sessions', async (t) => {
   await secondClient.connect(secondTransport);
   const secondTools = await secondClient.listTools();
   assert.ok(secondTools.tools.some((tool) => tool.name === 'research-video'));
+  await secondTransport.terminateSession();
   await secondClient.close();
   assert.equal(child.exitCode, null);
 

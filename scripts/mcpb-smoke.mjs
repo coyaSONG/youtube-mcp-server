@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { unzipSync } from 'fflate';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -17,16 +18,28 @@ const artifact = resolve(
 );
 const sandbox = await mkdtemp(join(tmpdir(), 'youtube-research-mcpb-'));
 const unpacked = join(sandbox, 'bundle');
-const mcpbCommand = join(
-  projectRoot,
-  'node_modules',
-  '.bin',
-  process.platform === 'win32' ? 'mcpb.cmd' : 'mcpb',
-);
+
 
 let client;
 try {
-  execFileSync(mcpbCommand, ['unpack', artifact, unpacked], { stdio: 'inherit' });
+  let totalSize = 0;
+  const files = unzipSync(await readFile(artifact), {
+    filter: ({ name, originalSize }) => {
+      assert.ok(!name.startsWith('/') && !name.includes('\\') && !name.includes(':')
+        && !name.split('/').includes('..'), `Unsafe archive path: ${name}`);
+      totalSize += originalSize;
+      assert.ok(totalSize <= 512 * 1024 * 1024, 'Bundle exceeds smoke-test extraction budget');
+      return true;
+    },
+  });
+  for (const [name, contents] of Object.entries(files)) {
+    const destination = join(unpacked, name);
+    if (name.endsWith('/')) await mkdir(destination, { recursive: true });
+    else {
+      await mkdir(dirname(destination), { recursive: true });
+      await writeFile(destination, contents);
+    }
+  }
   const manifest = JSON.parse(
     await readFile(join(unpacked, 'manifest.json'), 'utf8'),
   );

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import { config as loadEnvironment } from 'dotenv';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import createServer, { configSchema } from './index.js';
+
+loadEnvironment({ quiet: true });
 
 const server = createServer({
   config: configSchema.parse({

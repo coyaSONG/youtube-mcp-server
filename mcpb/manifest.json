@@ -52,7 +52,7 @@
       "linux"
     ],
     "runtimes": {
-      "node": ">=20"
+      "node": ">=22"
     }
   },
   "user_config": {

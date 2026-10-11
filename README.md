@@ -61,7 +61,7 @@ LIVE_TEST_VIDEO='https://youtu.be/VIDEO_ID' LIVE_TEST_QUERY='evaluation' npm run
 
 ## Quick start — no API key
 
-Requirements: Node.js 20 or newer.
+Requirements: Node.js 22 or newer.
 
 The shortest local install uses stdio and needs no API key:
 
@@ -446,3 +446,13 @@ MIT
 - [Model Context Protocol TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [YouTube Data API](https://developers.google.com/youtube/v3)
 - [YouTube.js](https://github.com/LuanRT/YouTube.js)
+
+### Comment pagination and evidence limits
+
+`search-videos` accepts the provider `pageToken`. `get-video-comments` preserves the next top-level token and accepts `searchTerms` for YouTube-side filtering.
+
+Use `includeReplies: true` for the embedded reply subset, or `completeReplies: true` for bounded reply pagination. Full retrieval defaults to 100 replies per thread; `maxRepliesPerThread` accepts 1–1000. Across all threads, each call returns at most 1000 replies and 1 MiB of reply JSON and makes at most 20 additional reply requests. Each Data API request times out after 10 seconds and does not retry automatically.
+
+Inspect each thread's `replyCoverage`: `available` is the provider's reported count, `returned` counts unique replies, `complete` confirms full observed coverage, and `truncated` indicates a local budget or pagination guard stopped collection. Counts may change while YouTube comments are being edited. Missing IDs or early provider termination do not establish complete coverage. Reduce the top-level `maxResults` to reserve more of the shared budget for each thread; `pageToken` continues top-level threads, not an incomplete reply list.
+
+Research `source` metadata includes `captionRequestedLanguage`, `captionTrackLanguage`, `captionLanguage`, `captionOrigin` (`manual`, `youtube_asr`, or `translated`) and `captionSourceOrigin`. Unknown provenance is `null`.
