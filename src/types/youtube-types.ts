@@ -5,6 +5,17 @@ export interface TranscriptSegment {
   videoId?: string; // Added for multi-video transcripts
 }
 
+export type CaptionOrigin = 'manual' | 'youtube_asr' | 'translated';
+export type CaptionTrackOrigin = 'manual' | 'youtube_asr';
+
+export interface CaptionProvenance {
+  requestedLanguage: string | null;
+  trackLanguage: string;
+  outputLanguage: string;
+  origin: CaptionOrigin;
+  sourceOrigin: CaptionTrackOrigin;
+}
+
 export interface ResearchSourceMetadata {
   videoId: string;
   title: string;
@@ -13,6 +24,11 @@ export interface ResearchSourceMetadata {
   channelName: string | null;
   channelUrl: string | null;
   thumbnailUrl: string | null;
+  captionRequestedLanguage: string | null;
+  captionTrackLanguage: string | null;
+  captionLanguage: string | null;
+  captionOrigin: CaptionOrigin | null;
+  captionSourceOrigin: CaptionTrackOrigin | null;
 }
 
 export interface ResearchTranscript {

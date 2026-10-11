@@ -13,6 +13,7 @@ test('distribution manifests describe the same release', async () => {
     readJson('../mcpb/manifest.json'),
   ]);
 
+  assert.equal(mcpbManifest.compatibility.runtimes.node, packageJson.engines.node);
   assert.equal(registryManifest.version, packageJson.version);
   assert.equal(mcpbManifest.version, packageJson.version);
   assert.equal(registryManifest.name, packageJson.mcpName);

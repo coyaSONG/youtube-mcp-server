@@ -10,9 +10,17 @@ import {
   SearchOptions,
   ResearchSourceMetadata,
   ResearchTranscript,
+  CaptionProvenance,
 } from './types/youtube-types.js';
 import { Json3CaptionResponse, parseJson3Transcript } from './transcript-parser.js';
 import { segmentTranscript } from './transcript-processing.js';
+
+const DEFAULT_REPLIES_PER_THREAD = 100;
+const MAX_REPLIES_PER_THREAD = 1000;
+const MAX_REPLIES_PER_CALL = 1000;
+const MAX_REPLY_REQUESTS = 20;
+const MAX_REPLY_BYTES = 1024 * 1024;
+const COMMENT_REQUEST_TIMEOUT_MS = 10_000;
 
 const TRANSCRIPT_CACHE_TTL = 3600; // Cache transcripts for 1 hour
 const TRANSCRIPT_CACHE_MAX_KEYS = 500;
@@ -44,6 +52,7 @@ function normalizeYouTubeUrl(url: string | undefined): string | null {
 export function createResearchSourceMetadata(
   videoId: string,
   basicInfo: BasicVideoInfo,
+  caption?: CaptionProvenance,
 ): ResearchSourceMetadata {
   const channelId = basicInfo.channel?.id ?? basicInfo.channel_id ?? null;
   const thumbnails = basicInfo.thumbnail ?? [];
@@ -58,6 +67,11 @@ export function createResearchSourceMetadata(
         ?? (channelId ? `/channel/${channelId}` : undefined),
     ),
     thumbnailUrl: thumbnails[thumbnails.length - 1]?.url ?? null,
+    captionRequestedLanguage: caption?.requestedLanguage ?? null,
+    captionTrackLanguage: caption?.trackLanguage ?? null,
+    captionLanguage: caption?.outputLanguage ?? null,
+    captionOrigin: caption?.origin ?? null,
+    captionSourceOrigin: caption?.sourceOrigin ?? null,
   };
 }
 
@@ -123,12 +137,24 @@ export class YouTubeService {
 
     const captionUrl = new URL(track.base_url);
     captionUrl.searchParams.set('fmt', 'json3');
-    if (language && track.language_code.toLowerCase() !== language.toLowerCase()) {
+    const translated = Boolean(
+      language && track.language_code.toLowerCase() !== language.toLowerCase(),
+    );
+    if (translated) {
       if (!track.is_translatable) {
         throw new Error(`No captions are available for language ${language}.`);
       }
-      captionUrl.searchParams.set('tlang', language);
+      captionUrl.searchParams.set('tlang', language!);
     }
+
+    const sourceOrigin = track.kind === 'asr' ? 'youtube_asr' : 'manual';
+    const captionProvenance: CaptionProvenance = {
+      requestedLanguage: language ?? null,
+      trackLanguage: track.language_code,
+      outputLanguage: translated && language ? language : track.language_code,
+      origin: translated ? 'translated' : sourceOrigin,
+      sourceOrigin,
+    };
 
     const response = await fetch(captionUrl, {
       headers: { 'user-agent': 'Mozilla/5.0 (compatible; YouTubeResearchMCP/1.2)' },
@@ -146,7 +172,11 @@ export class YouTubeService {
 
     return {
       segments,
-      metadata: createResearchSourceMetadata(videoId, videoInfo.basic_info),
+      metadata: createResearchSourceMetadata(
+        videoId,
+        videoInfo.basic_info,
+        captionProvenance,
+      ),
     };
   }
 
@@ -163,6 +193,7 @@ export class YouTubeService {
       videoCaption?: string;
       videoDefinition?: string;
       regionCode?: string;
+      pageToken?: string;
     } = {}
   ): Promise<youtube_v3.Schema$SearchListResponse> {
     this.requireApiKey();
@@ -179,7 +210,8 @@ export class YouTubeService {
         publishedBefore: options.publishedBefore,
         videoCaption: options.videoCaption,
         videoDefinition: options.videoDefinition,
-        regionCode: options.regionCode
+        regionCode: options.regionCode,
+        pageToken: options.pageToken
       });
       return response.data;
     } catch (error) {
@@ -223,21 +255,165 @@ export class YouTubeService {
       order?: 'time' | 'relevance';
       pageToken?: string;
       includeReplies?: boolean;
+      completeReplies?: boolean;
+      maxRepliesPerThread?: number;
+      searchTerms?: string;
     } = {}
   ): Promise<youtube_v3.Schema$CommentThreadListResponse> {
     this.requireApiKey();
     try {
-      const { order = 'relevance', pageToken, includeReplies = false } = options;
+      const {
+        order = 'relevance',
+        pageToken,
+        includeReplies = false,
+        completeReplies = false,
+        maxRepliesPerThread,
+        searchTerms,
+      } = options;
+      if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > 100) {
+        throw new Error('maxResults must be an integer between 1 and 100.');
+      }
+      if (maxRepliesPerThread !== undefined && (
+        !Number.isInteger(maxRepliesPerThread)
+        || maxRepliesPerThread < 1
+        || maxRepliesPerThread > MAX_REPLIES_PER_THREAD
+      )) {
+        throw new Error('maxRepliesPerThread must be an integer between 1 and 1000.');
+      }
+      const withReplies = includeReplies || completeReplies;
+      const replyLimit = completeReplies
+        ? (maxRepliesPerThread ?? DEFAULT_REPLIES_PER_THREAD)
+        : MAX_REPLIES_PER_THREAD;
 
       const response = await this.youtube.commentThreads.list({
-        part: includeReplies ? ['snippet', 'replies'] : ['snippet'],
+        part: withReplies ? ['snippet', 'replies'] : ['snippet'],
         videoId,
         maxResults,
         order,
-        pageToken
-      });
+        pageToken,
+        searchTerms,
+        textFormat: 'plainText',
+      }, { timeout: COMMENT_REQUEST_TIMEOUT_MS, retry: false });
+      const result = response.data as youtube_v3.Schema$CommentThreadListResponse & {
+        researchContext?: {
+          videoId: string;
+          sourceUrl: string;
+          maxResults: number;
+          order: 'time' | 'relevance';
+          searchTerms: string | null;
+          pageToken: string | null;
+          includeReplies: boolean;
+          completeReplies: boolean;
+          maxRepliesPerThread: number | null;
+        };
+      };
+      result.researchContext = {
+        videoId,
+        sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        maxResults,
+        order,
+        searchTerms: searchTerms ?? null,
+        pageToken: pageToken ?? null,
+        includeReplies: withReplies,
+        completeReplies,
+        maxRepliesPerThread: completeReplies ? replyLimit : null,
+      };
 
-      return response.data;
+      if (!withReplies) {
+        return result;
+      }
+
+      // Budgets are shared by all threads, including provider-embedded replies.
+      let returnedReplies = 0;
+      let returnedReplyBytes = 0;
+      let replyRequests = 0;
+      for (const thread of result.items ?? []) {
+        const rawTotalReplies = thread.snippet?.totalReplyCount;
+        const totalReplies = rawTotalReplies ?? -1;
+        const countIsValid = Number.isSafeInteger(totalReplies) && totalReplies >= 0;
+        const embeddedReplies = thread.replies?.comments ?? [];
+        const embeddedIds = new Set(embeddedReplies.map((reply) => reply.id).filter(Boolean));
+        const topLevelCommentId = thread.snippet?.topLevelComment?.id;
+        const replies: youtube_v3.Schema$Comment[] = [];
+        const seenReplyIds = new Set<string>();
+        let providerHasMore = false;
+        let stopped = false;
+        let invalidReply = false;
+
+        const appendReplies = (items: youtube_v3.Schema$Comment[]) => {
+          for (const reply of items) {
+            if (!reply.id) {
+              invalidReply = true;
+              continue;
+            }
+            if (seenReplyIds.has(reply.id)) continue;
+            const bytes = Buffer.byteLength(JSON.stringify(reply), 'utf8');
+            if (replies.length >= replyLimit || returnedReplies >= MAX_REPLIES_PER_CALL
+              || returnedReplyBytes + bytes > MAX_REPLY_BYTES) {
+              stopped = true;
+              break;
+            }
+            seenReplyIds.add(reply.id);
+            replies.push(reply);
+            returnedReplies += 1;
+            returnedReplyBytes += bytes;
+          }
+        };
+
+        if (completeReplies && topLevelCommentId
+          && (!countIsValid || embeddedIds.size < totalReplies)) {
+          let replyPageToken: string | undefined;
+          const seenPageTokens = new Set<string>();
+          do {
+            const remaining = Math.min(replyLimit - replies.length, MAX_REPLIES_PER_CALL - returnedReplies);
+            if (remaining <= 0 || replyRequests >= MAX_REPLY_REQUESTS
+              || returnedReplyBytes >= MAX_REPLY_BYTES) {
+              stopped = true;
+              break;
+            }
+            replyRequests += 1;
+            const replyResponse = await this.youtube.comments.list({
+              part: ['snippet'],
+              parentId: topLevelCommentId,
+              maxResults: Math.min(100, remaining),
+              pageToken: replyPageToken,
+              textFormat: 'plainText',
+            }, { timeout: COMMENT_REQUEST_TIMEOUT_MS, retry: false });
+            const previousLength = replies.length;
+            appendReplies(replyResponse.data.items ?? []);
+            const nextPageToken = replyResponse.data.nextPageToken ?? undefined;
+            providerHasMore = Boolean(nextPageToken);
+            if (stopped || !nextPageToken) break;
+            if (seenPageTokens.has(nextPageToken) || replies.length === previousLength) {
+              stopped = true;
+              break;
+            }
+            seenPageTokens.add(nextPageToken);
+            replyPageToken = nextPageToken;
+          } while (true);
+        } else {
+          appendReplies(embeddedReplies);
+        }
+
+        const threadWithCoverage = thread as youtube_v3.Schema$CommentThread & {
+          replyCoverage?: {
+            available: number;
+            returned: number;
+            complete: boolean;
+            truncated: boolean;
+          };
+        };
+        threadWithCoverage.replies = { comments: replies };
+        threadWithCoverage.replyCoverage = {
+          available: countIsValid ? totalReplies : 0,
+          returned: replies.length,
+          complete: countIsValid && !invalidReply && !stopped
+            && replies.length >= totalReplies && !providerHasMore,
+          truncated: stopped,
+        };
+      }
+
+      return result;
     } catch (error) {
       console.error('Error getting comments:', error);
       throw error;

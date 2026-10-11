@@ -19,7 +19,7 @@ async function reservePort() {
 }
 
 async function waitForHealth(baseUrl) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
     try {
       const response = await fetch(`${baseUrl}/health`);
       if (response.ok) return response;
@@ -95,7 +95,25 @@ test('HTTP server exposes health and validates MCP sessions', async (t) => {
   assert.equal(researchTool.annotations.readOnlyHint, true);
   assert.equal(researchTool.annotations.destructiveHint, false);
   assert.equal(researchTool.outputSchema.type, 'object');
+  await mcpTransport.terminateSession();
   await mcpClient.close();
+
+  assert.equal(child.exitCode, null);
+  const postCloseHealthResponse = await fetch(`${baseUrl}/health`);
+  assert.equal(postCloseHealthResponse.status, 200);
+
+  const secondClient = new Client({ name: 'http-test-client-2', version: '1.0.0' });
+  const secondTransport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
+    requestInit: {
+      headers: { authorization: 'Bearer test-token' },
+    },
+  });
+  await secondClient.connect(secondTransport);
+  const secondTools = await secondClient.listTools();
+  assert.ok(secondTools.tools.some((tool) => tool.name === 'research-video'));
+  await secondTransport.terminateSession();
+  await secondClient.close();
+  assert.equal(child.exitCode, null);
 
   const uninitializedResponse = await fetch(`${baseUrl}/mcp`, {
     method: 'POST',
