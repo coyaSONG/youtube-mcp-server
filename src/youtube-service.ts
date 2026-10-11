@@ -10,6 +10,7 @@ import {
   SearchOptions,
   ResearchSourceMetadata,
   ResearchTranscript,
+  CaptionProvenance,
 } from './types/youtube-types.js';
 import { Json3CaptionResponse, parseJson3Transcript } from './transcript-parser.js';
 import { segmentTranscript } from './transcript-processing.js';
@@ -44,6 +45,7 @@ function normalizeYouTubeUrl(url: string | undefined): string | null {
 export function createResearchSourceMetadata(
   videoId: string,
   basicInfo: BasicVideoInfo,
+  caption?: CaptionProvenance,
 ): ResearchSourceMetadata {
   const channelId = basicInfo.channel?.id ?? basicInfo.channel_id ?? null;
   const thumbnails = basicInfo.thumbnail ?? [];
@@ -58,6 +60,11 @@ export function createResearchSourceMetadata(
         ?? (channelId ? `/channel/${channelId}` : undefined),
     ),
     thumbnailUrl: thumbnails[thumbnails.length - 1]?.url ?? null,
+    captionRequestedLanguage: caption?.requestedLanguage ?? null,
+    captionTrackLanguage: caption?.trackLanguage ?? null,
+    captionLanguage: caption?.outputLanguage ?? null,
+    captionOrigin: caption?.origin ?? null,
+    captionSourceOrigin: caption?.sourceOrigin ?? null,
   };
 }
 
@@ -123,12 +130,24 @@ export class YouTubeService {
 
     const captionUrl = new URL(track.base_url);
     captionUrl.searchParams.set('fmt', 'json3');
-    if (language && track.language_code.toLowerCase() !== language.toLowerCase()) {
+    const translated = Boolean(
+      language && track.language_code.toLowerCase() !== language.toLowerCase(),
+    );
+    if (translated) {
       if (!track.is_translatable) {
         throw new Error(`No captions are available for language ${language}.`);
       }
-      captionUrl.searchParams.set('tlang', language);
+      captionUrl.searchParams.set('tlang', language!);
     }
+
+    const sourceOrigin = track.kind === 'asr' ? 'youtube_asr' : 'manual';
+    const captionProvenance: CaptionProvenance = {
+      requestedLanguage: language ?? null,
+      trackLanguage: track.language_code,
+      outputLanguage: translated && language ? language : track.language_code,
+      origin: translated ? 'translated' : sourceOrigin,
+      sourceOrigin,
+    };
 
     const response = await fetch(captionUrl, {
       headers: { 'user-agent': 'Mozilla/5.0 (compatible; YouTubeResearchMCP/1.2)' },
@@ -146,7 +165,11 @@ export class YouTubeService {
 
     return {
       segments,
-      metadata: createResearchSourceMetadata(videoId, videoInfo.basic_info),
+      metadata: createResearchSourceMetadata(
+        videoId,
+        videoInfo.basic_info,
+        captionProvenance,
+      ),
     };
   }
 
