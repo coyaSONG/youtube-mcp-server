@@ -1,5 +1,3 @@
-
-
 # YouTube Research MCP
 
 [![CI](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/coyaSONG/youtube-mcp-server/actions/workflows/ci.yml)
