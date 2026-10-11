@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/%40coyasong%2Fyoutube-mcp-server?logo=npm)](https://www.npmjs.com/package/@coyasong/youtube-mcp-server)
 [![npm downloads](https://img.shields.io/npm/dm/%40coyasong%2Fyoutube-mcp-server?logo=npm)](https://www.npmjs.com/package/@coyasong/youtube-mcp-server)
 [![GitHub stars](https://img.shields.io/github/stars/coyaSONG/youtube-mcp-server?style=flat&logo=github)](https://github.com/coyaSONG/youtube-mcp-server/stargazers)
-[![Smithery](https://smithery.ai/badge/coyaSONG/youtube-mcp-server)](https://smithery.ai/servers/coyaSONG/youtube-mcp-server)
+[![LightNow MCP capabilities](https://lightnow.ai/badge/io.github.coyaSONG/youtube-research)](https://lightnow.ai/servers/io.github.coyaSONG/youtube-research)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Turn YouTube videos into citation-ready research for Codex, Claude, Cursor, and other MCP clients. Paste a video URL and get transcript evidence with timestamps and links that open at the exact quoted moment.
