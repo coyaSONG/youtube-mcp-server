@@ -202,8 +202,6 @@ app.post('/mcp', async (req, res) => {
       if (closedSessionId) {
         sessions.delete(closedSessionId);
       }
-
-      void server.close();
     };
 
     sessionContext = { server, transport, lastAccessedAt: Date.now() };
